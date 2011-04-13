@@ -1,0 +1,164 @@
+{-# LANGUAGE GADTs, OverloadedStrings, DeriveDataTypeable, TypeFamilies,
+             FlexibleContexts, BangPatterns #-}
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.State.Acid.Core
+-- Copyright   :  PublicDomain
+--
+-- Maintainer  :  lemmih@gmail.com
+-- Portability :  portable
+--
+-- Low-level controls for transaction-based state changes. This module defines
+-- structures and tools for running state modifiers indexed either by an Method
+-- or a serialized Method. This module should rarely be used directly although
+-- the 'Method' class is needed when defining events manually.
+--
+-- The term \'Event\' is loosely used for transactions with ACID guarantees.
+-- \'Method\' is loosely used for state operations without ACID guarantees
+--
+module Data.State.Acid.Core
+    ( Core
+    , Method(..)
+    , MethodContainer(..)
+    , Tagged
+    , mkCore
+    , closeCore
+    , modifyCoreState
+    , modifyCoreState_
+    , withCoreState
+    , lookupHotMethod
+    , lookupColdMethod
+    , runHotMethod
+    , runColdMethod
+    ) where
+
+import Control.Concurrent
+import Control.Monad
+import Control.Monad.State (State, runState )
+import qualified Data.Map as Map
+import qualified Data.ByteString.Lazy as Lazy
+import qualified Data.ByteString.Lazy.Char8 as Lazy.Char8
+
+import Data.Binary
+
+import Data.Typeable
+import Unsafe.Coerce (unsafeCoerce)
+
+
+-- | The basic Method class. Each Method has an indexed result type
+--   and a unique tag.
+class ( Typeable ev, Binary ev
+      , Typeable (MethodResult ev), Binary (MethodResult ev)) =>
+      Method ev where
+    type MethodResult ev
+    methodTag :: ev -> Tag
+    methodTag ev = Lazy.Char8.pack (show (typeOf ev))
+
+-- | The control structure at the very center of acid-state.
+--   This module provides access to a mutable state through
+--   methods. No efforts towards durability, checkpointing or
+--   sharding happens at this level.
+--   Important things to keep in mind in this module:
+--     * We don't distinguish between updates and queries.
+--     * We allow direct access to the core state as well
+--       as through events.
+data Core st
+    = Core { coreState   :: MVar st
+           , coreMethods :: MethodMap st
+           }
+
+-- | Construct a new Core using an initial state and a list of Methods.
+mkCore :: [MethodContainer st]   -- ^ List of methods capable of modifying the state.
+       -> st                     -- ^ Initial state value.
+       -> IO (Core st)
+mkCore methods initialValue
+    = do mvar <- newMVar initialValue
+         return Core{ coreState   = mvar
+                    , coreMethods = mkMethodMap methods }
+
+-- | Mark Core as closed. Any subsequent use will throw an exception.
+closeCore :: Core st -> IO ()
+closeCore core
+    = do swapMVar (coreState core) errorMsg
+         return ()
+    where errorMsg = error "Access failure: Core closed."
+
+-- | Modify the state component. The resulting state is ensured to be in
+--   WHNF.
+modifyCoreState :: Core st -> (st -> IO (st, a)) -> IO a
+modifyCoreState core action
+    = modifyMVar (coreState core) $ \st -> do (!st, a) <- action st
+                                              return (st, a)
+
+-- | Modify the state component. The resulting state is ensured to be in
+--   WHNF.
+modifyCoreState_ :: Core st -> (st -> IO st) -> IO ()
+modifyCoreState_ core action
+    = modifyMVar_ (coreState core) $ \st -> do !st' <- action st
+                                               return st'
+
+-- | Access the state component.
+withCoreState :: Core st -> (st -> IO a) -> IO a
+withCoreState core action
+    = withMVar (coreState core) action
+
+-- | Execute a method as given by a type identifier and an encoded string.
+--   The exact format of the encoded string depends on the type identifier.
+--   Results are encoded and type tagged before they're handed back out.
+--   This function is used when running events from a log-file or from another
+--   server. Events that originate locally are most likely executed with
+--   the faster 'runHotMethod'.
+runColdMethod :: Core st -> Tagged Lazy.ByteString -> IO Lazy.ByteString
+runColdMethod core taggedMethod
+    = modifyCoreState core $ \st ->
+      do let (a, st') = runState (lookupColdMethod core taggedMethod) st
+         return ( st', a)
+
+-- | Find the state action that corresponds to a tagged and serialized method.
+lookupColdMethod :: Core st -> Tagged Lazy.ByteString -> (State st Lazy.ByteString)
+lookupColdMethod core (methodTag, methodContent)
+    = case Map.lookup methodTag (coreMethods core) of
+        Nothing      -> error $ "Method tag doesn't exist: " ++ show methodTag
+        Just (Method method)
+          -> liftM encode (method (decode methodContent))
+      
+-- | Apply an in-memory method to the state.
+runHotMethod :: Method method => Core st -> method -> IO (MethodResult method)
+runHotMethod core method
+    = modifyCoreState core $ \st ->
+      do let (a, st') = runState (lookupHotMethod core method) st
+         return ( st', a)
+
+-- | Find the state action that corresponds to an in-memory method.
+lookupHotMethod :: Method method => Core st -> method -> State st (MethodResult method)
+lookupHotMethod core method
+    = case Map.lookup (methodTag method) (coreMethods core) of
+        Nothing -> error $ "Method type doesn't exist: " ++ show (typeOf method)
+        Just (Method methodHandler)
+          -> -- If the methodTag doesn't index the right methodHandler then we're in deep
+             -- trouble. Luckly, it would take deliberate malevolence for that to happen.
+             unsafeCoerce methodHandler method
+
+-- | Method tags must be unique and are most commenly generated automatically.
+type Tag = Lazy.ByteString
+type Tagged a = (Tag, a)
+
+-- | Method container structure that hides the exact type of the method.
+data MethodContainer st where
+    Method :: Method method => (method -> State st (MethodResult method)) -> MethodContainer st
+
+-- | Collection of Methods indexed by a Tag.
+type MethodMap st = Map.Map Tag (MethodContainer st)
+
+-- | Construct a 'MethodMap' from a list of Methods using their associated tag.
+mkMethodMap :: [MethodContainer st] -> MethodMap st
+mkMethodMap methods
+    = Map.fromList [ (methodType method, method) | method <- methods ]
+    where -- A little bit of ugliness is required to access the methodTags.
+          methodType :: MethodContainer st -> Tag
+          methodType m = case m of
+                           Method fn -> let ev :: (ev -> State st res) -> ev
+                                            ev _ = undefined
+                                        in methodTag (ev fn)
+
+
