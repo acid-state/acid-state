@@ -19,6 +19,8 @@ module Data.State.Acid.Local
     , EventResult
     , UpdateEvent
     , QueryEvent
+    , Update
+    , Query
     , mkAcidState
     , closeAcidState
     , createCheckpoint
@@ -86,8 +88,11 @@ data AcidState st
                 , localCheckpoints :: FileLog Checkpoint
                 }
 
+-- | Context monad for Update events.
 newtype Update st a = Update { unUpdate :: State.State st a }
     deriving (Monad, State.MonadState st)
+
+-- | Context monad for Query events.
 newtype Query st a  = Query { unQuery :: Reader st a }
     deriving (Monad, MonadReader st)
 
