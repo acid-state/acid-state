@@ -53,7 +53,7 @@ Library
   
   -- Packages needed in order to build this package.
   Build-depends:       base >= 4 && < 5, binary, bytestring, stm, filepath, directory,
-                       monads-fd, array, containers
+                       mtl, array, containers
 
   Hs-Source-Dirs:         src/
   
