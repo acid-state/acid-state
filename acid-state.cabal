@@ -49,7 +49,7 @@ Library
 
   -- Modules not exported by this package.
   Other-modules:       Data.State.Acid.Log, Data.State.Acid.Archive,
-                       Data.State.Acid.CRC
+                       Data.State.Acid.CRC, Paths_acid_state
   
   -- Packages needed in order to build this package.
   Build-depends:       base >= 4 && < 5, binary, bytestring, stm, filepath, directory,

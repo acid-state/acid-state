@@ -23,7 +23,10 @@ import Data.List
 import Data.Maybe
 import Data.Binary
 
-import Text.Printf
+import Text.Printf                               ( printf )
+
+import Paths_acid_state                          ( version )
+import Data.Version                              ( showVersion )
 
 type EntryId = Int
 
@@ -54,9 +57,17 @@ findLogFiles identifier
                  , logFile <- maybeToList (stripPrefix (logPrefix identifier ++ "-") file)
                  , (tid, ".log") <- reads logFile ]
 
+
+saveVersionFile :: LogKey object -> IO ()
+saveVersionFile key
+    = do exist <- doesFileExist versionFile
+         unless exist $ writeFile versionFile (showVersion version)
+    where versionFile = logDirectory key </> logPrefix key <.> "version"
+
 openFileLog :: LogKey object -> IO (FileLog object)
 openFileLog identifier
     = do logFiles <- findLogFiles identifier
+         saveVersionFile identifier
          currentState <- newEmptyMVar
          queue <- newTVarIO []
          nextEntryRef <- newTVarIO 0
