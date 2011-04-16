@@ -6,7 +6,7 @@
 -- Copyright   :  PublicDomain
 --
 -- Maintainer  :  lemmih@gmail.com
--- Portability :  portable
+-- Portability :  non-portable (uses GHC extensions)
 --
 -- Low-level controls for transaction-based state changes. This module defines
 -- structures and tools for running state modifiers indexed either by an Method

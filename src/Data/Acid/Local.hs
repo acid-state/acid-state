@@ -6,7 +6,7 @@
 -- Copyright   :  PublicDomain
 --
 -- Maintainer  :  lemmih@gmail.com
--- Portability :  portable
+-- Portability :  non-portable (uses GHC extensions)
 --
 -- AcidState container using a transaction log on disk. The term \'Event\' is
 -- loosely used for transactions with ACID guarantees. \'Method\' is loosely
