@@ -22,9 +22,10 @@ This code:
 
 @
 myUpdate :: Argument -> Update State Result
-myUpdate = ...
+myUpdate arg = ...
 
 myQuery :: Argument -> Query State Result
+myQuery arg = ...
 
 $(makeAcidic ''State ['myUpdate, 'myQuery])
 @
