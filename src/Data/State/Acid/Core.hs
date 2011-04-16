@@ -51,6 +51,7 @@ class ( Typeable ev, Binary ev
       , Typeable (MethodResult ev), Binary (MethodResult ev)) =>
       Method ev where
     type MethodResult ev
+    type MethodState ev
     methodTag :: ev -> Tag
     methodTag ev = Lazy.Char8.pack (show (typeOf ev))
 
@@ -123,14 +124,14 @@ lookupColdMethod core (methodTag, methodContent)
           -> liftM encode (method (decode methodContent))
       
 -- | Apply an in-memory method to the state.
-runHotMethod :: Method method => Core st -> method -> IO (MethodResult method)
+runHotMethod :: Method method => Core (MethodState method) -> method -> IO (MethodResult method)
 runHotMethod core method
     = modifyCoreState core $ \st ->
       do let (a, st') = runState (lookupHotMethod core method) st
          return ( st', a)
 
 -- | Find the state action that corresponds to an in-memory method.
-lookupHotMethod :: Method method => Core st -> method -> State st (MethodResult method)
+lookupHotMethod :: Method method => Core (MethodState method) -> method -> State (MethodState method) (MethodResult method)
 lookupHotMethod core method
     = case Map.lookup (methodTag method) (coreMethods core) of
         Nothing -> error $ "Method type doesn't exist: " ++ show (typeOf method)
@@ -145,7 +146,7 @@ type Tagged a = (Tag, a)
 
 -- | Method container structure that hides the exact type of the method.
 data MethodContainer st where
-    Method :: Method method => (method -> State st (MethodResult method)) -> MethodContainer st
+    Method :: (Method method) => (method -> State (MethodState method) (MethodResult method)) -> MethodContainer (MethodState method)
 
 -- | Collection of Methods indexed by a Tag.
 type MethodMap st = Map.Map Tag (MethodContainer st)

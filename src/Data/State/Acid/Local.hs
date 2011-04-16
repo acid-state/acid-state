@@ -14,14 +14,16 @@
 --
 
 module Data.State.Acid.Local
-    ( AcidState
+    ( IsAcidic(..)
+    , AcidState
     , Event(..)
     , EventResult
     , UpdateEvent
     , QueryEvent
     , Update
     , Query
-    , mkAcidState
+    , openAcidState
+    , openAcidStateFrom
     , closeAcidState
     , createCheckpoint
     , update
@@ -45,6 +47,8 @@ import System.FilePath
 --   depends on the event.
 type EventResult ev = MethodResult ev
 
+type EventState ev = MethodState ev
+
 -- | We distinguish between events that modify the state and those that do not.
 --
 --   UpdateEvents are executed in a MonadState context and have to be serialized
@@ -53,8 +57,8 @@ type EventResult ev = MethodResult ev
 --   QueryEvents are executed in a MonadReader context and obviously do not have
 --   to be serialized to disk.
 data Event st where
-    UpdateEvent :: UpdateEvent ev => (ev -> Update st (EventResult ev)) -> Event st
-    QueryEvent  :: QueryEvent  ev => (ev -> Query st (EventResult ev)) -> Event st
+    UpdateEvent :: UpdateEvent ev => (ev -> Update (EventState ev) (EventResult ev)) -> Event (EventState ev)
+    QueryEvent  :: QueryEvent  ev => (ev -> Query (EventState ev) (EventResult ev)) -> Event (EventState ev)
 
 -- | All UpdateEvents are also Methods.
 class Method ev => UpdateEvent ev
@@ -101,19 +105,20 @@ newtype Query st a  = Query { unQuery :: Reader st a }
 --   parallel.
 --   
 --   It's a run-time error to issue events that aren't supported by the AcidState.
-update :: UpdateEvent event => AcidState st -> event -> IO (EventResult event)
+update :: UpdateEvent event => AcidState (EventState event) -> event -> IO (EventResult event)
 update acidState event
     = do mvar <- newEmptyMVar
          modifyCoreState_ (localCore acidState) $ \st ->
            do let (result, st') = State.runState hotMethod st
-              -- schedule the log entry. Very important that it happens when 'localCore' is locked.
+              -- Schedule the log entry. Very important that it happens when 'localCore' is locked
+              -- to ensure that events are logged in the same order that they are executed.
               pushEntry (localEvents acidState) (methodTag event, encode event) $ putMVar mvar result
               return st'
          takeMVar mvar
     where hotMethod = lookupHotMethod (localCore acidState) event
 
 -- | Issue a Query event and wait for its result. Events may be issued in parallel.
-query  :: QueryEvent event  => AcidState st -> event -> IO (EventResult event)
+query  :: QueryEvent event  => AcidState (EventState event) -> event -> IO (EventResult event)
 query acidState event
     = runHotMethod (localCore acidState) event
 
@@ -141,18 +146,32 @@ instance Binary Checkpoint where
              put content
     get = Checkpoint <$> get <*> get
 
+class (Binary st) => IsAcidic st where
+    acidEvents :: [Event st]
+      -- ^ List of events capable of updating or querying the state.
 
--- | Create an AcidState given a list of events (aka. transactions) and an initial value.
+-- | Create an AcidState given an initial value.
 --   
 --   This will create or resume a log found in the \"state\/[typeOf state]\/\" directory.
-mkAcidState :: (Typeable st, Binary st)
-            => [Event st]                -- ^ List of events capable of updating or querying the state.
-            -> st                        -- ^ Initial state value. This value is only used if no checkpoint is
+openAcidState :: (Typeable st, IsAcidic st)
+              => st                          -- ^ Initial state value. This value is only used if no checkpoint is
+                                             --   found.
+              -> IO (AcidState st)
+openAcidState initialState
+    = openAcidStateFrom ("state" </> show (typeOf initialState)) initialState
+
+-- | Create an AcidState given a log directory and an initial value.
+--   
+--   This will create or resume a log found in @directory@.
+--   Running two AcidState's from the same directory is an error
+--   but will not result in dataloss.
+openAcidStateFrom :: (IsAcidic st)
+                  => FilePath            -- ^ Location of the checkpoint and transaction files.
+                  -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
                                          --   found.
-            -> IO (AcidState st)
-mkAcidState events initialState
-    = do core <- mkCore (eventsToMethods events) initialState
-         let directory = "state" </> show (typeOf initialState)
+                  -> IO (AcidState st)
+openAcidStateFrom directory initialState
+    = do core <- mkCore (eventsToMethods acidEvents) initialState
          let eventsLogKey = LogKey { logDirectory = directory
                                    , logPrefix = "events" }
              checkpointsLogKey = LogKey { logDirectory = directory
@@ -164,9 +183,10 @@ mkAcidState events initialState
                 Just (Checkpoint eventCutOff content)
                   -> do modifyCoreState_ core (\_oldState -> return (decode content))
                         return eventCutOff
-         events <- entriesAfterCutoff eventsLogKey n
-         mapM_ (runColdMethod core) events
+         
          eventsLog <- openFileLog eventsLogKey
+         events <- readEntriesFrom eventsLog n
+         mapM_ (runColdMethod core) events
          checkpointsLog <- openFileLog checkpointsLogKey
          return AcidState { localCore = core
                           , localEvents = eventsLog

@@ -1,3 +1,7 @@
+-- A log is a stack of entries that supports efficient pushing of
+-- new entries and fetching of old. It can be considered an
+-- extendible array of entries.
+--
 module Data.State.Acid.Log
     ( FileLog
     , LogKey(..)
@@ -5,8 +9,8 @@ module Data.State.Acid.Log
     , openFileLog
     , closeFileLog
     , pushEntry
+    , readEntriesFrom
     , newestEntry
-    , entriesAfterCutoff
     , askCurrentEntryId
     ) where
 
@@ -34,7 +38,7 @@ data FileLog object
     = FileLog { logIdentifier  :: LogKey object
               , logCurrent     :: MVar (Handle)
               , logNextEntryId :: TVar EntryId
-              , logQueue       :: TVar [(Lazy.ByteString,IO ())]
+              , logQueue       :: TVar ([Lazy.ByteString], [IO ()])
               , logThreads     :: [ThreadId]
               }
 
@@ -69,21 +73,9 @@ openFileLog identifier
     = do logFiles <- findLogFiles identifier
          saveVersionFile identifier
          currentState <- newEmptyMVar
-         queue <- newTVarIO []
+         queue <- newTVarIO ([], [])
          nextEntryRef <- newTVarIO 0
-         tid2 <- forkIO $ forever $ do pairs <- atomically $ do vals <- readTVar queue
-                                                                guard (not $ null vals)
-                                                                writeTVar queue []
-                                                                return (reverse vals)
-                                       let (entries, actions) = unzip pairs
-                                       withMVar currentState $ \handle ->
-                                         do let arch = Archive.packEntries entries
-                                            seq (Lazy.length arch) (return ())
-                                            Lazy.hPutStr handle arch
-                                            hFlush handle
-                                            return ()
-                                       sequence_ actions
-                                       yield
+         tid2 <- forkIO $ fileWriter currentState queue
          let log = FileLog { logIdentifier  = identifier
                            , logCurrent     = currentState
                            , logNextEntryId = nextEntryRef
@@ -101,6 +93,23 @@ openFileLog identifier
                     putMVar currentState currentHandle
          return log
 
+fileWriter currentState queue
+    = forever $
+      do (entries, actions) <- atomically $ do (entries, actions) <- readTVar queue
+                                               when (null entries && null actions) retry
+                                               writeTVar queue ([], [])
+                                               -- We don't actually have to reverse the actions
+                                               -- but I don't think it hurts performance much.
+                                               return (reverse entries, reverse actions)
+         withMVar currentState $ \handle ->
+           do let arch = Archive.packEntries entries
+              Lazy.hPutStr handle arch
+              hFlush handle
+              return ()
+         sequence_ actions
+         yield
+
+
 closeFileLog :: FileLog object -> IO ()
 closeFileLog log
     = modifyMVar_ (logCurrent log) $ \handle ->
@@ -117,31 +126,61 @@ readEntities path
               = entry : worker next
           worker Fail{} = []
 
--- Return entries newer than or equal to the cutoff.
--- Do not use after the log has been opened.
--- Implementation: 1) find the files that /may/ contain entries
---                    younger than the cutoff.
---                 2) parse all the entries in those files.
---                 3) drop the entries that are too old.
-entriesAfterCutoff :: Binary object => LogKey object -> EntryId -> IO [object]
-entriesAfterCutoff identifier cutoff
-    = do logFiles <- findLogFiles identifier
-         let sorted   = reverse $ sort logFiles       -- newest files first
-             relevant = reverse $ takeRelevant sorted -- oldest files first
-             (entryIds, files) = unzip relevant
-         case entryIds of
-           [] -> return []
-           (firstEntryId : _)
-             -> do archive <- liftM Lazy.concat $ mapM Lazy.readFile files
-                   let events = entriesToList $ readEntries archive
-                   return $ map decode $ drop (cutoff - firstEntryId) events
-    where takeRelevant [] = []
-          takeRelevant ((firstEntryId, file) : rest)
-              | firstEntryId < cutoff
-              = [ (firstEntryId, file) ]
-              | otherwise
-              = (firstEntryId, file) : takeRelevant rest
+-- Read all durable entries younger than the given EntryId.
+-- Note that entries written during or after this call won't
+-- be included in the returned list.
+readEntriesFrom :: Binary object => FileLog object -> EntryId -> IO [object]
+readEntriesFrom log youngestEntry
+    = do -- Cut the log so we can read written entries without interfering
+         -- with the writing of new entries.
+         entryCap <- cutFileLog log
+         -- We're interested in these entries: youngestEntry <= x < entryCap.
+         logFiles <- findLogFiles (logIdentifier log)
+         let sorted = sort logFiles
+             findRelevant [] = []
+             findRelevant [ logFile ]
+                 | youngestEntry <= rangeStart logFile && rangeStart logFile < entryCap
+                 = [ logFile ]
+                 | otherwise
+                 = []
+             findRelevant ( left : right : xs )
+                 | youngestEntry >= rangeStart right -- All entries in 'path' must be too old if this is true
+                 = findRelevant (right : xs)
+                 | rangeStart left >= entryCap -- All files from now on contain entries that are too young.
+                 = []
+                 | otherwise
+                 = left : findRelevant (right : xs)
 
+             relevant = findRelevant sorted
+             firstEntryId = case relevant of
+                              []                     -> 0
+                              ( logFile : _logFiles) -> rangeStart logFile
+
+         archive <- liftM Lazy.concat $ mapM Lazy.readFile (map snd relevant)
+         let entries = entriesToList $ readEntries archive
+         return $ map decode
+                $ take (entryCap - youngestEntry)             -- Take events under the eventCap.
+                $ drop (youngestEntry - firstEntryId) entries -- Drop entries that are too young.
+
+    where rangeStart (firstEntryId, _path) = firstEntryId
+
+
+cutFileLog :: FileLog object -> IO EntryId
+cutFileLog log
+    = do mvar <- newEmptyMVar
+         let action = do currentEntryId <- atomically $
+                                           do (entries, _) <- readTVar (logQueue log)
+                                              next <- readTVar (logNextEntryId log)
+                                              return (next - length entries)
+                         modifyMVar_ (logCurrent log) $ \old ->
+                           do hClose old
+                              openFile (logDirectory key </> formatLogFile (logPrefix key) currentEntryId) WriteMode
+                         putMVar mvar currentEntryId
+         atomically $
+           do (entries, actions) <- readTVar (logQueue log)
+              writeTVar (logQueue log) (entries, action : actions)
+         takeMVar mvar
+    where key = logIdentifier log
 
 -- Finds the newest entry in the log. Doesn't work on open logs.
 -- Do not use after the log has been opened.
@@ -165,14 +204,16 @@ newestEntry identifier
           lastEntry entry Fail{} = entry
           lastEntry _ (Next entry next) = lastEntry entry next
 
--- Schedule a new log entry. May not block.
+-- Schedule a new log entry. This call does not block
+-- The given IO action runs once the object is durable. The IO action
+-- blocks the serialization of events so it should be swift.
 pushEntry :: Binary object => FileLog object -> object -> IO () -> IO ()
 pushEntry log object finally
     = atomically $
       do tid <- readTVar (logNextEntryId log)
          writeTVar (logNextEntryId log) (tid+1)
-         pairs <- readTVar (logQueue log)
-         writeTVar (logQueue log) ((encoded, finally) : pairs)
+         (entries, actions) <- readTVar (logQueue log)
+         writeTVar (logQueue log) ( encoded : entries, finally : actions )
     where encoded = encode object
 
 askCurrentEntryId :: FileLog object -> IO EntryId
