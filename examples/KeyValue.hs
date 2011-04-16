@@ -24,6 +24,9 @@ type Value = String
 data KeyValue = KeyValue !(Map.Map Key Value)
     deriving (Typeable)
 
+instance Binary KeyValue where
+    put (KeyValue state) = put state
+    get = liftM KeyValue get
 
 ------------------------------------------------------
 -- The transaction we will execute over the state.
@@ -42,7 +45,7 @@ lookupKey key
 -- This is how AcidState is used:
 
 main :: IO ()
-main = do acid <- mkAcidState myEvents (KeyValue Map.empty)
+main = do acid <- openAcidState (KeyValue Map.empty)
           args <- getArgs
           case args of
             [key]
@@ -74,6 +77,7 @@ instance Binary InsertKey where
     get = InsertKey <$> get <*> get
 instance Method InsertKey where
     type MethodResult InsertKey = ()
+    type MethodState InsertKey = KeyValue
 instance UpdateEvent InsertKey
 
 deriving instance Typeable LookupKey
@@ -82,13 +86,10 @@ instance Binary LookupKey where
     get = LookupKey <$> get
 instance Method LookupKey where
     type MethodResult LookupKey = Maybe Value
+    type MethodState LookupKey = KeyValue
 instance QueryEvent LookupKey
 
-instance Binary KeyValue where
-    put (KeyValue state) = put state
-    get = liftM KeyValue get
-
-myEvents :: [Event KeyValue]
-myEvents = [ UpdateEvent (\(InsertKey key value) -> insertKey key value)
-           , QueryEvent (\(LookupKey key) -> lookupKey key)
-           ]
+instance IsAcidic KeyValue where
+    acidEvents = [ UpdateEvent (\(InsertKey key value) -> insertKey key value)
+                 , QueryEvent (\(LookupKey key) -> lookupKey key)
+                 ]

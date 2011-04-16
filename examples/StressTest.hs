@@ -18,6 +18,9 @@ import Data.Typeable
 data StressState = StressState !Int
     deriving (Show, Typeable)
 
+instance Binary StressState where
+    put (StressState state) = put state
+    get = liftM StressState get
 
 ------------------------------------------------------
 -- The transaction we will execute over the state.
@@ -35,7 +38,7 @@ queryState = do StressState i <- ask
 -- This is how AcidState is used:
 
 main :: IO ()
-main = do acid <- mkAcidState myEvents (StressState 0)
+main = do acid <- openAcidState (StressState 0)
           args <- getArgs
           case args of
             ["checkpoint"]
@@ -70,6 +73,7 @@ instance Binary PokeState where
     get = return PokeState
 instance Method PokeState where
     type MethodResult PokeState = ()
+    type MethodState PokeState = StressState
 instance UpdateEvent PokeState
 
 deriving instance Typeable QueryState
@@ -78,13 +82,10 @@ instance Binary QueryState where
     get = return QueryState
 instance Method QueryState where
     type MethodResult QueryState = Int
+    type MethodState QueryState = StressState
 instance QueryEvent QueryState
 
-instance Binary StressState where
-    put (StressState state) = put state
-    get = liftM StressState get
-
-myEvents :: [Event StressState]
-myEvents = [ UpdateEvent (\PokeState -> pokeState)
-           , QueryEvent (\QueryState -> queryState)
-           ]
+instance IsAcidic StressState where
+    acidEvents = [ UpdateEvent (\PokeState -> pokeState)
+                 , QueryEvent (\QueryState -> queryState)
+                 ]

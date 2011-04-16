@@ -17,6 +17,9 @@ import Data.Typeable
 data HelloWorldState = HelloWorldState String
     deriving (Show, Typeable)
 
+instance Binary HelloWorldState where
+    put (HelloWorldState state) = put state
+    get = liftM HelloWorldState get
 
 ------------------------------------------------------
 -- The transaction we will execute over the state.
@@ -34,7 +37,7 @@ queryState = do HelloWorldState string <- ask
 -- This is how AcidState is used:
 
 main :: IO ()
-main = do acid <- mkAcidState myEvents (HelloWorldState "Hello world")
+main = do acid <- openAcidState (HelloWorldState "Hello world")
           args <- getArgs
           if null args
              then do string <- query acid QueryState
@@ -57,6 +60,7 @@ instance Binary WriteState where
     get = liftM WriteState get
 instance Method WriteState where
     type MethodResult WriteState = ()
+    type MethodState WriteState = HelloWorldState
 instance UpdateEvent WriteState
 
 deriving instance Typeable QueryState
@@ -65,13 +69,11 @@ instance Binary QueryState where
     get = return QueryState
 instance Method QueryState where
     type MethodResult QueryState = String
+    type MethodState QueryState = HelloWorldState
 instance QueryEvent QueryState
 
-instance Binary HelloWorldState where
-    put (HelloWorldState state) = put state
-    get = liftM HelloWorldState get
 
-myEvents :: [Event HelloWorldState]
-myEvents = [ UpdateEvent (\(WriteState newState) -> writeState newState)
-           , QueryEvent (\QueryState             -> queryState)
-           ]
+instance IsAcidic HelloWorldState where
+    acidEvents = [ UpdateEvent (\(WriteState newState) -> writeState newState)
+                 , QueryEvent (\QueryState             -> queryState)
+                 ]
