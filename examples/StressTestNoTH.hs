@@ -1,8 +1,8 @@
-{-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
+{-# LANGUAGE DeriveDataTypeable, TypeFamilies, StandaloneDeriving #-}
 module Main (main) where
 
 import Data.Acid.Core
-import Data.Acid
+import Data.Acid.Local
 
 import qualified Control.Monad.State as State
 import Control.Monad.Reader
@@ -33,7 +33,6 @@ queryState :: Query StressState Int
 queryState = do StressState i <- ask
                 return i
 
-$(makeAcidic ''StressState ['pokeState, 'queryState])
 
 ------------------------------------------------------
 -- This is how AcidState is used:
@@ -57,3 +56,36 @@ main = do acid <- openAcidState (StressState 0)
                     putStrLn $ "  poke             Spawn 10k transactions."
                     putStrLn $ "  checkpoint       Create a new checkpoint."
           closeAcidState acid
+
+
+
+------------------------------------------------------
+-- The gritty details. These things may be done with
+-- Template Haskell in the future.
+
+data PokeState = PokeState
+data QueryState = QueryState
+
+
+deriving instance Typeable PokeState
+instance Binary PokeState where
+    put PokeState = return ()
+    get = return PokeState
+instance Method PokeState where
+    type MethodResult PokeState = ()
+    type MethodState PokeState = StressState
+instance UpdateEvent PokeState
+
+deriving instance Typeable QueryState
+instance Binary QueryState where
+    put QueryState = return ()
+    get = return QueryState
+instance Method QueryState where
+    type MethodResult QueryState = Int
+    type MethodState QueryState = StressState
+instance QueryEvent QueryState
+
+instance IsAcidic StressState where
+    acidEvents = [ UpdateEvent (\PokeState -> pokeState)
+                 , QueryEvent (\QueryState -> queryState)
+                 ]

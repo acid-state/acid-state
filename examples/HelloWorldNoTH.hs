@@ -1,8 +1,8 @@
-{-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
+{-# LANGUAGE DeriveDataTypeable, TypeFamilies, StandaloneDeriving #-}
 module Main (main) where
 
 import Data.Acid.Core
-import Data.Acid
+import Data.Acid.Local
 
 import qualified Control.Monad.State as State
 import Control.Monad.Reader
@@ -32,7 +32,6 @@ queryState :: Query HelloWorldState String
 queryState = do HelloWorldState string <- ask
                 return string
 
-$(makeAcidic ''HelloWorldState ['writeState, 'queryState])
 
 ------------------------------------------------------
 -- This is how AcidState is used:
@@ -45,3 +44,36 @@ main = do acid <- openAcidState (HelloWorldState "Hello world")
                      putStrLn $ "The state is: " ++ string
              else do update acid (WriteState (unwords args))
                      putStrLn $ "The state has been modified!"
+
+
+------------------------------------------------------
+-- The gritty details. These things may be done with
+-- Template Haskell in the future.
+
+data WriteState = WriteState String
+data QueryState = QueryState
+
+
+deriving instance Typeable WriteState
+instance Binary WriteState where
+    put (WriteState st) = put st
+    get = liftM WriteState get
+instance Method WriteState where
+    type MethodResult WriteState = ()
+    type MethodState WriteState = HelloWorldState
+instance UpdateEvent WriteState
+
+deriving instance Typeable QueryState
+instance Binary QueryState where
+    put QueryState = return ()
+    get = return QueryState
+instance Method QueryState where
+    type MethodResult QueryState = String
+    type MethodState QueryState = HelloWorldState
+instance QueryEvent QueryState
+
+
+instance IsAcidic HelloWorldState where
+    acidEvents = [ UpdateEvent (\(WriteState newState) -> writeState newState)
+                 , QueryEvent (\QueryState             -> queryState)
+                 ]

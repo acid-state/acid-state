@@ -1,8 +1,8 @@
-{-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
+{-# LANGUAGE DeriveDataTypeable, TypeFamilies, StandaloneDeriving #-}
 module Main (main) where
 
 import Data.Acid.Core
-import Data.Acid
+import Data.Acid.Local
 
 import qualified Control.Monad.State as State
 import Control.Monad.Reader
@@ -41,8 +41,6 @@ lookupKey key
     = do KeyValue m <- ask
          return (Map.lookup key m)
 
-$(makeAcidic ''KeyValue ['insertKey, 'lookupKey])
-
 ------------------------------------------------------
 -- This is how AcidState is used:
 
@@ -62,3 +60,36 @@ main = do acid <- openAcidState (KeyValue Map.empty)
                     putStrLn "  key          Lookup the value of 'key'."
                     putStrLn "  key value    Set the value of 'key' to 'value'."
           closeAcidState acid
+
+
+
+------------------------------------------------------
+-- The gritty details. These things may be done with
+-- Template Haskell in the future.
+
+data InsertKey = InsertKey Key Value
+data LookupKey = LookupKey Key
+
+
+deriving instance Typeable InsertKey
+instance Binary InsertKey where
+    put (InsertKey key value) = put key >> put value
+    get = InsertKey <$> get <*> get
+instance Method InsertKey where
+    type MethodResult InsertKey = ()
+    type MethodState InsertKey = KeyValue
+instance UpdateEvent InsertKey
+
+deriving instance Typeable LookupKey
+instance Binary LookupKey where
+    put (LookupKey key) = put key
+    get = LookupKey <$> get
+instance Method LookupKey where
+    type MethodResult LookupKey = Maybe Value
+    type MethodState LookupKey = KeyValue
+instance QueryEvent LookupKey
+
+instance IsAcidic KeyValue where
+    acidEvents = [ UpdateEvent (\(InsertKey key value) -> insertKey key value)
+                 , QueryEvent (\(LookupKey key) -> lookupKey key)
+                 ]
