@@ -8,7 +8,9 @@
 
  AcidState container using a transaction log on disk.
 
- Complete Hello Database example using AcidState:
+ To see how it all fits together, have a look at these example
+ <http://mirror.seize.it/acid-state/examples/>.
+
 -}
  
 module Data.Acid
