@@ -3,7 +3,7 @@ Format:
  |content length| crc16   | content |
  |8 bytes       | 2 bytes | n bytes |
 -}
-module Data.State.Acid.Archive
+module Data.Acid.Archive
     ( Entry
     , Entries(..)
     , putEntries
@@ -13,7 +13,7 @@ module Data.State.Acid.Archive
     , entriesToListNoFail
     ) where
 
-import Data.State.Acid.CRC
+import Data.Acid.CRC
 
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict

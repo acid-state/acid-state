@@ -45,13 +45,13 @@ Cabal-version:       >=1.6
 
 Library
   -- Modules exported by the library.
-  Exposed-Modules:     Data.State.Acid, Data.State.Acid.Core,
-                       Data.State.Acid.Local
+  Exposed-Modules:     Data.Acid, Data.Acid.Core,
+                       Data.Acid.Local
 
   -- Modules not exported by this package.
-  Other-modules:       Data.State.Acid.Log, Data.State.Acid.Archive,
-                       Data.State.Acid.CRC, Paths_acid_state,
-                       Data.State.Acid.TemplateHaskell
+  Other-modules:       Data.Acid.Log, Data.Acid.Archive,
+                       Data.Acid.CRC, Paths_acid_state,
+                       Data.Acid.TemplateHaskell
   
   -- Packages needed in order to build this package.
   Build-depends:       base >= 4 && < 5, binary, bytestring, stm, filepath, directory,

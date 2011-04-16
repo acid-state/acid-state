@@ -2,7 +2,7 @@
              MagicHash, GeneralizedNewtypeDeriving #-}
 -----------------------------------------------------------------------------
 -- |
--- Module      :  Data.State.Acid.Local
+-- Module      :  Data.Acid.Local
 -- Copyright   :  PublicDomain
 --
 -- Maintainer  :  lemmih@gmail.com
@@ -10,10 +10,10 @@
 --
 -- AcidState container using a transaction log on disk. The term \'Event\' is
 -- loosely used for transactions with ACID guarantees. \'Method\' is loosely
--- used for state operations without ACID guarantees (see "Data.State.Acid.Core").
+-- used for state operations without ACID guarantees (see "Data.Acid.Core").
 --
 
-module Data.State.Acid.Local
+module Data.Acid.Local
     ( IsAcidic(..)
     , AcidState
     , Event(..)
@@ -30,8 +30,8 @@ module Data.State.Acid.Local
     , query
     ) where
 
-import Data.State.Acid.Log as Log
-import Data.State.Acid.Core
+import Data.Acid.Log as Log
+import Data.Acid.Core
 
 import Control.Concurrent
 import qualified Control.Monad.State as State

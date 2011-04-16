@@ -2,7 +2,7 @@
              FlexibleContexts, BangPatterns #-}
 -----------------------------------------------------------------------------
 -- |
--- Module      :  Data.State.Acid.Core
+-- Module      :  Data.Acid.Core
 -- Copyright   :  PublicDomain
 --
 -- Maintainer  :  lemmih@gmail.com
@@ -16,7 +16,7 @@
 -- The term \'Event\' is loosely used for transactions with ACID guarantees.
 -- \'Method\' is loosely used for state operations without ACID guarantees
 --
-module Data.State.Acid.Core
+module Data.Acid.Core
     ( Core
     , Method(..)
     , MethodContainer(..)

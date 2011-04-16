@@ -2,7 +2,7 @@
 -- new entries and fetching of old. It can be considered an
 -- extendible array of entries.
 --
-module Data.State.Acid.Log
+module Data.Acid.Log
     ( FileLog
     , LogKey(..)
     , EntryId
@@ -14,7 +14,7 @@ module Data.State.Acid.Log
     , askCurrentEntryId
     ) where
 
-import Data.State.Acid.Archive as Archive
+import Data.Acid.Archive as Archive
 import System.Directory
 import System.FilePath
 import System.IO

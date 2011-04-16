@@ -1,13 +1,13 @@
 {-# LANGUAGE TemplateHaskell #-}
 {- Holy crap this code is messy. -}
-module Data.State.Acid.TemplateHaskell
+module Data.Acid.TemplateHaskell
     ( makeAcidic
     ) where
 
 import Language.Haskell.TH
 
-import Data.State.Acid.Core
-import Data.State.Acid.Local
+import Data.Acid.Core
+import Data.Acid.Local
 
 import Data.Binary
 import Data.Typeable
