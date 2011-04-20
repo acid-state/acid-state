@@ -68,7 +68,8 @@ class Method ev => QueryEvent ev
 
 eventsToMethods :: [Event st] -> [MethodContainer st]
 eventsToMethods = map worker
-    where worker (UpdateEvent fn) = Method (unUpdate . fn)
+    where worker :: Event st -> MethodContainer st
+          worker (UpdateEvent fn) = Method (unUpdate . fn)
           worker (QueryEvent fn)  = Method (\ev -> do st <- State.get
                                                       return (runReader (unQuery $ fn ev) st)
                                            )
