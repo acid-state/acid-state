@@ -9,7 +9,7 @@ import Control.Monad.Reader
 import Control.Applicative
 import System.Environment
 import System.IO
-import Data.Binary
+import Data.Serialize
 
 import Data.Typeable
 
@@ -24,7 +24,7 @@ type Value = String
 data KeyValue = KeyValue !(Map.Map Key Value)
     deriving (Typeable)
 
-instance Binary KeyValue where
+instance Serialize KeyValue where
     put (KeyValue state) = put state
     get = liftM KeyValue get
 
@@ -72,7 +72,7 @@ data LookupKey = LookupKey Key
 
 
 deriving instance Typeable InsertKey
-instance Binary InsertKey where
+instance Serialize InsertKey where
     put (InsertKey key value) = put key >> put value
     get = InsertKey <$> get <*> get
 instance Method InsertKey where
@@ -81,7 +81,7 @@ instance Method InsertKey where
 instance UpdateEvent InsertKey
 
 deriving instance Typeable LookupKey
-instance Binary LookupKey where
+instance Serialize LookupKey where
     put (LookupKey key) = put key
     get = LookupKey <$> get
 instance Method LookupKey where

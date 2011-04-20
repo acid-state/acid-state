@@ -7,14 +7,14 @@ import Control.Monad.State                   ( get, put )
 import Control.Monad.Reader                  ( ask )
 import Control.Applicative                   ( (<$>) )
 import System.Environment                    ( getArgs )
-import qualified Data.Binary as Binary
+import qualified Data.Serialize as Serialize
 
 type Message = String
 data Database = Database [Message]
 
-instance Binary.Binary Database where
-    get = Database <$> Binary.get
-    put (Database msg) = Binary.put msg
+instance Serialize.Serialize Database where
+    get = Database <$> Serialize.get
+    put (Database msg) = Serialize.put msg
 
 -- Transactions are defined to run in either the 'Update' monad
 -- or the 'Query' monad.                                                                                                                                    

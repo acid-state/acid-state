@@ -8,7 +8,7 @@ import qualified Control.Monad.State as State
 import Control.Monad.Reader
 import System.Environment
 import System.IO
-import Data.Binary
+import Data.Serialize
 
 import Data.Typeable
 
@@ -18,7 +18,7 @@ import Data.Typeable
 data StressState = StressState !Int
     deriving (Show, Typeable)
 
-instance Binary StressState where
+instance Serialize StressState where
     put (StressState state) = put state
     get = liftM StressState get
 

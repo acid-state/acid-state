@@ -36,10 +36,11 @@ import Control.Concurrent
 import Control.Monad
 import Control.Monad.State (State, runState )
 import qualified Data.Map as Map
+import qualified Data.ByteString as Strict
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString.Lazy.Char8 as Lazy.Char8
 
-import Data.Binary
+import Data.Serialize
 
 import Data.Typeable
 import Unsafe.Coerce (unsafeCoerce)
@@ -47,8 +48,8 @@ import Unsafe.Coerce (unsafeCoerce)
 
 -- | The basic Method class. Each Method has an indexed result type
 --   and a unique tag.
-class ( Typeable ev, Binary ev
-      , Typeable (MethodResult ev), Binary (MethodResult ev)) =>
+class ( Typeable ev, Serialize ev
+      , Typeable (MethodResult ev), Serialize (MethodResult ev)) =>
       Method ev where
     type MethodResult ev
     type MethodState ev
@@ -121,8 +122,18 @@ lookupColdMethod core (methodTag, methodContent)
     = case Map.lookup methodTag (coreMethods core) of
         Nothing      -> error $ "Method tag doesn't exist: " ++ show methodTag
         Just (Method method)
-          -> liftM encode (method (decode methodContent))
-      
+          -> liftM (toLazy . encode) (method (lazyDecode methodContent))
+
+
+-- XXX: Fixme when this code is available in cereal.
+toLazy bs = Lazy.fromChunks [bs]
+toStrict bs = Strict.concat (Lazy.toChunks bs)
+lazyDecode inp
+    = case decode (toStrict inp) of
+        Left msg  -> error msg
+        Right val -> val
+
+
 -- | Apply an in-memory method to the state.
 runHotMethod :: Method method => Core (MethodState method) -> method -> IO (MethodResult method)
 runHotMethod core method

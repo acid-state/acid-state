@@ -8,7 +8,7 @@ import qualified Control.Monad.State as State
 import Control.Monad.Reader
 import System.Environment
 import System.IO
-import Data.Binary
+import Data.Serialize
 
 import Data.Typeable
 
@@ -18,7 +18,7 @@ import Data.Typeable
 data StressState = StressState !Int
     deriving (Show, Typeable)
 
-instance Binary StressState where
+instance Serialize StressState where
     put (StressState state) = put state
     get = liftM StressState get
 
@@ -68,7 +68,7 @@ data QueryState = QueryState
 
 
 deriving instance Typeable PokeState
-instance Binary PokeState where
+instance Serialize PokeState where
     put PokeState = return ()
     get = return PokeState
 instance Method PokeState where
@@ -77,7 +77,7 @@ instance Method PokeState where
 instance UpdateEvent PokeState
 
 deriving instance Typeable QueryState
-instance Binary QueryState where
+instance Serialize QueryState where
     put QueryState = return ()
     get = return QueryState
 instance Method QueryState where

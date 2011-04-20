@@ -7,7 +7,7 @@ import Data.Acid.Local
 import qualified Control.Monad.State as State
 import Control.Monad.Reader
 import System.Environment
-import Data.Binary
+import Data.Serialize
 
 import Data.Typeable
 
@@ -17,7 +17,7 @@ import Data.Typeable
 data HelloWorldState = HelloWorldState String
     deriving (Show, Typeable)
 
-instance Binary HelloWorldState where
+instance Serialize HelloWorldState where
     put (HelloWorldState state) = put state
     get = liftM HelloWorldState get
 
@@ -55,7 +55,7 @@ data QueryState = QueryState
 
 
 deriving instance Typeable WriteState
-instance Binary WriteState where
+instance Serialize WriteState where
     put (WriteState st) = put st
     get = liftM WriteState get
 instance Method WriteState where
@@ -64,7 +64,7 @@ instance Method WriteState where
 instance UpdateEvent WriteState
 
 deriving instance Typeable QueryState
-instance Binary QueryState where
+instance Serialize QueryState where
     put QueryState = return ()
     get = return QueryState
 instance Method QueryState where

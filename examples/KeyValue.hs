@@ -9,7 +9,7 @@ import Control.Monad.Reader
 import Control.Applicative
 import System.Environment
 import System.IO
-import Data.Binary
+import Data.Serialize
 
 import Data.Typeable
 
@@ -24,7 +24,7 @@ type Value = String
 data KeyValue = KeyValue !(Map.Map Key Value)
     deriving (Typeable)
 
-instance Binary KeyValue where
+instance Serialize KeyValue where
     put (KeyValue state) = put state
     get = liftM KeyValue get
 

@@ -7,7 +7,7 @@ import Data.Acid
 import qualified Control.Monad.State as State
 import Control.Monad.Reader
 import System.Environment
-import Data.Binary
+import Data.Serialize
 
 import Data.Typeable
 
@@ -17,7 +17,7 @@ import Data.Typeable
 data HelloWorldState = HelloWorldState String
     deriving (Show, Typeable)
 
-instance Binary HelloWorldState where
+instance Serialize HelloWorldState where
     put (HelloWorldState state) = put state
     get = liftM HelloWorldState get
 

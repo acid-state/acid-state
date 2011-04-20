@@ -17,8 +17,9 @@ import Data.Acid.CRC
 
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict
-import Data.Binary.Get
-import Data.Binary.Builder
+import qualified Data.Serialize.Get as Serialize
+import Data.Serialize.Get hiding (Result(..))
+import Data.Serialize.Builder
 import Data.Monoid
 
 type Entry = Lazy.ByteString
@@ -51,22 +52,28 @@ packEntries = toLazyByteString . putEntries
 
 readEntries :: Lazy.ByteString -> Entries
 readEntries bs
-    | Lazy.null bs
-    = Done
-    | Lazy.length header < headerSize
-    = Fail "Incomplete header."
-    | Lazy.length content /= fromIntegral contentLength
-    = Fail "Insuficient content."
-    | crc16 content /= contentHash
-    = Fail "Invalid hash"
-    | otherwise
-    = Next content (readEntries rest)
-    where header        = Lazy.take headerSize bs
-          headerSize    = 10
-          contentLength = fromIntegral $ runGet getWord64le header
-          contentHash   = runGet getWord16le $ Lazy.drop 8 header
-          content       = Lazy.take contentLength $ Lazy.drop headerSize bs
-          rest          = Lazy.drop (contentLength+headerSize) bs
+    = worker (Lazy.toChunks bs)
+    where worker [] = Done
+          worker (x:xs)
+              = check (runGetPartial readEntry x) xs
+          check result more
+              = case result of
+                  Serialize.Done entry rest
+                      | Strict.null rest    -> Next entry (worker more)
+                      | otherwise           -> Next entry (worker (rest:more))
+                  Serialize.Fail msg        -> Fail msg
+                  Serialize.Partial cont    -> case more of
+                                                 []     -> check (cont Strict.empty) []
+                                                 (x:xs) -> check (cont x) xs
+
+readEntry :: Get Entry
+readEntry
+    = do contentLength <- getWord64le
+         contentChecksum <-getWord16le
+         content <- getLazyByteString (fromIntegral contentLength)
+         if (crc16 content /= contentChecksum)
+           then fail "Invalid hash"
+           else return content
 
 lazyToStrict :: Lazy.ByteString -> Strict.ByteString
 lazyToStrict = Strict.concat . Lazy.toChunks

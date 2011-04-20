@@ -38,8 +38,9 @@ import qualified Control.Monad.State as State
 import Control.Monad.Reader
 import Control.Applicative
 import qualified Data.ByteString.Lazy as Lazy
+import qualified Data.ByteString as Strict
 
-import Data.Binary
+import Data.Serialize
 import Data.Typeable
 import System.FilePath
 
@@ -113,7 +114,7 @@ update acidState event
            do let (result, st') = State.runState hotMethod st
               -- Schedule the log entry. Very important that it happens when 'localCore' is locked
               -- to ensure that events are logged in the same order that they are executed.
-              pushEntry (localEvents acidState) (methodTag event, encode event) $ putMVar mvar result
+              pushEntry (localEvents acidState) (methodTag event, Lazy.fromChunks [encode event]) $ putMVar mvar result
               return st'
          takeMVar mvar
     where hotMethod = lookupHotMethod (localCore acidState) event
@@ -129,25 +130,25 @@ query acidState event
 --   with this call.
 --   
 --   This call will not return until the operation has succeeded.
-createCheckpoint :: Binary st => AcidState st -> IO ()
+createCheckpoint :: Serialize st => AcidState st -> IO ()
 createCheckpoint acidState
     = do mvar <- newEmptyMVar
          withCoreState (localCore acidState) $ \st ->
            do eventId <- askCurrentEntryId (localEvents acidState)
-              pushEntry (localCheckpoints acidState) (Checkpoint eventId (encode st)) (putMVar mvar ())
+              pushEntry (localCheckpoints acidState) (Checkpoint eventId (Lazy.fromChunks [encode st])) (putMVar mvar ())
          takeMVar mvar
          
 
 
 data Checkpoint = Checkpoint EntryId Lazy.ByteString
 
-instance Binary Checkpoint where
+instance Serialize Checkpoint where
     put (Checkpoint eventEntryId content)
         = do put eventEntryId
              put content
     get = Checkpoint <$> get <*> get
 
-class (Binary st) => IsAcidic st where
+class (Serialize st) => IsAcidic st where
     acidEvents :: [Event st]
       -- ^ List of events capable of updating or querying the state.
 
@@ -182,7 +183,9 @@ openAcidStateFrom directory initialState
                 Nothing
                   -> return 0
                 Just (Checkpoint eventCutOff content)
-                  -> do modifyCoreState_ core (\_oldState -> return (decode content))
+                  -> do modifyCoreState_ core (\_oldState -> case decode (Strict.concat (Lazy.toChunks content)) of
+                                                               Left msg  -> error msg
+                                                               Right val -> return val)
                         return eventCutOff
          
          eventsLog <- openFileLog eventsLogKey

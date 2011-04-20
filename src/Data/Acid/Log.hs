@@ -22,10 +22,13 @@ import Control.Monad
 import Control.Concurrent
 import Control.Concurrent.STM
 import qualified Data.ByteString.Lazy as Lazy
---import qualified Data.ByteString as Strict
+import qualified Data.ByteString as Strict
 import Data.List
 import Data.Maybe
-import Data.Binary
+import Data.Serialize                            ( Serialize )
+import qualified Data.Serialize as Serialize
+import qualified Data.Serialize.Get as Get
+import qualified Data.Serialize.Put as Put
 
 import Text.Printf                               ( printf )
 
@@ -129,7 +132,7 @@ readEntities path
 -- Read all durable entries younger than the given EntryId.
 -- Note that entries written during or after this call won't
 -- be included in the returned list.
-readEntriesFrom :: Binary object => FileLog object -> EntryId -> IO [object]
+readEntriesFrom :: Serialize object => FileLog object -> EntryId -> IO [object]
 readEntriesFrom log youngestEntry
     = do -- Cut the log so we can read written entries without interfering
          -- with the writing of new entries.
@@ -158,7 +161,7 @@ readEntriesFrom log youngestEntry
 
          archive <- liftM Lazy.concat $ mapM Lazy.readFile (map snd relevant)
          let entries = entriesToList $ readEntries archive
-         return $ map decode
+         return $ map decode'
                 $ take (entryCap - youngestEntry)             -- Take events under the eventCap.
                 $ drop (youngestEntry - firstEntryId) entries -- Drop entries that are too young.
 
@@ -187,7 +190,7 @@ cutFileLog log
 -- Implementation: Search the newest log files first. Once a file
 --                 containing at least one valid entry is found,
 --                 return the last entry in that file.
-newestEntry :: Binary object => LogKey object -> IO (Maybe object)
+newestEntry :: Serialize object => LogKey object -> IO (Maybe object)
 newestEntry identifier
     = do logFiles <- findLogFiles identifier
          let sorted = reverse $ sort logFiles
@@ -198,7 +201,7 @@ newestEntry identifier
           worker (archive:archives)
               = case Archive.readEntries archive of
                   Done            -> worker archives
-                  Next entry next -> Just (decode (lastEntry entry next))
+                  Next entry next -> Just (decode' (lastEntry entry next))
                   Fail{}          -> worker archives
           lastEntry entry Done   = entry
           lastEntry entry Fail{} = entry
@@ -207,7 +210,7 @@ newestEntry identifier
 -- Schedule a new log entry. This call does not block
 -- The given IO action runs once the object is durable. The IO action
 -- blocks the serialization of events so it should be swift.
-pushEntry :: Binary object => FileLog object -> object -> IO () -> IO ()
+pushEntry :: Serialize object => FileLog object -> object -> IO () -> IO ()
 pushEntry log object finally
     = atomically $
       do tid <- readTVar (logNextEntryId log)
@@ -219,3 +222,33 @@ pushEntry log object finally
 askCurrentEntryId :: FileLog object -> IO EntryId
 askCurrentEntryId log
     = atomically $ readTVar (logNextEntryId log)
+
+
+encode :: Serialize object => object -> Lazy.ByteString
+encode object = Lazy.fromChunks [Put.runPut (Serialize.put object)]
+
+-- XXX: Fixme when this code is available in cereal.
+decode' :: Serialize object => Lazy.ByteString -> object
+decode' inp
+    = case decode inp of
+        Left msg  -> error msg
+        Right val -> val
+
+-- XXX: Fixme when this code is available in cereal.
+decode :: Serialize object => Lazy.ByteString -> Either String object
+decode inp
+    = worker (Get.runGetPartial Serialize.get) (Lazy.toChunks inp)
+    where worker cont []
+              = case cont Strict.empty of
+                  Serialize.Done val rest
+                      | Strict.null rest  -> Right val
+                      | otherwise         -> Left "garbage after object"
+                  Serialize.Fail msg      -> Left msg
+                  Serialize.Partial cont' -> worker cont' []
+          worker cont (x:xs)
+              = case cont x of
+                  Serialize.Done val rest
+                      | Strict.null rest  -> Right val
+                      | otherwise         -> Left "garbage after object"
+                  Serialize.Fail msg      -> Left msg
+                  Serialize.Partial cont' -> worker cont' xs

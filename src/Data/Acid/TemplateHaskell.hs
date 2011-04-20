@@ -9,7 +9,7 @@ import Language.Haskell.TH
 import Data.Acid.Core
 import Data.Acid.Local
 
-import Data.Binary
+import Data.Serialize
 import Data.Typeable
 import Data.Char
 import Control.Applicative
@@ -57,7 +57,7 @@ makeEvent eventName stateName
     = do eventInfo <- reify eventName
          eventType <- getEventType eventName
          d <- makeEventDataType eventName eventType
-         b <- makeBinaryInstance eventName eventType
+         b <- makeSerializeInstance eventName eventType
          i <- makeMethodInstance eventName eventType
          e <- makeEventInstance eventName eventType
          return [d,b,i,e]
@@ -70,11 +70,11 @@ getEventType eventName
              -> return eventType
            _ -> error $ "Events must be functions: " ++ show eventName
 
---instance (Binary key, Typeable key, Binary val, Typeable val) => IsAcidic State where
+--instance (Serialize key, Typeable key, Serialize val, Typeable val) => IsAcidic State where
 --  acidEvents = [ UpdateEven (\(MyUpdateEvent arg1 arg2 -> myUpdateEvent arg1 arg2) ]
 makeIsAcidic eventNames stateName tyvars constructors
     = do types <- mapM getEventType eventNames
-         let preds = [ ''Binary, ''Typeable ]
+         let preds = [ ''Serialize, ''Typeable ]
              ty = appT (conT ''IsAcidic) stateType
              handlers = map (uncurry makeEventHandler) (zip eventNames types)
          instanceD (mkCxtFromTyVars preds tyvars []) ty
@@ -103,12 +103,12 @@ makeEventDataType eventName eventType
           structName [] = []
           structName (x:xs) = toUpper x : xs
 
--- instance (Binary key, Binary val) => Binary (MyUpdateEvent key val) where
+-- instance (Serialize key, Serialize val) => Serialize (MyUpdateEvent key val) where
 --    put (MyUpdateEvent a b) = do put a; put b
 --    get = MyUpdateEvent <$> get <*> get
-makeBinaryInstance eventName eventType
-    = do let preds = [ ''Binary ]
-             ty = AppT (ConT ''Binary) (foldl AppT (ConT eventStructName) [ VarT tyvar | PlainTV tyvar <- tyvars ])
+makeSerializeInstance eventName eventType
+    = do let preds = [ ''Serialize ]
+             ty = AppT (ConT ''Serialize) (foldl AppT (ConT eventStructName) [ VarT tyvar | PlainTV tyvar <- tyvars ])
 
              getBase = appE (varE 'return) (conE eventStructName)
              getArgs = foldl (\a b -> infixE (Just a) (varE '(<*>)) (Just (varE 'get))) getBase args
@@ -133,13 +133,13 @@ mkCxtFromTyVars preds tyvars extraContext
             map return extraContext
 
 {-
-instance (Binary key, Typeable key
-         ,Binary val, Typeable val) => Method (MyUpdateEvent key val) where
+instance (Serialize key, Typeable key
+         ,Serialize val, Typeable val) => Method (MyUpdateEvent key val) where
   type MethodResult (MyUpdateEvent key val) = Return
   type MethodState (MyUpdateEvent key val) = State key val
 -}
 makeMethodInstance eventName eventType
-    = do let preds = [ ''Binary, ''Typeable ]
+    = do let preds = [ ''Serialize, ''Typeable ]
              ty = AppT (ConT ''Method) (foldl AppT (ConT eventStructName) [ VarT tyvar | PlainTV tyvar <- tyvars ])
              structType = foldl appT (conT eventStructName) [ varT tyvar | PlainTV tyvar <- tyvars ]
          instanceD (cxt $ [ classP classPred [varT tyvar] | PlainTV tyvar <- tyvars, classPred <- preds ] ++ map return context)
@@ -152,10 +152,10 @@ makeMethodInstance eventName eventType
           structName [] = []
           structName (x:xs) = toUpper x : xs
 
---instance (Binary key, Typeable key
---         ,Binary val, Typeable val) => UpdateEvent (MyUpdateEvent key val)
+--instance (Serialize key, Typeable key
+--         ,Serialize val, Typeable val) => UpdateEvent (MyUpdateEvent key val)
 makeEventInstance eventName eventType
-    = do let preds = [ ''Binary, ''Typeable ]
+    = do let preds = [ ''Serialize, ''Typeable ]
              eventClass = if isUpdate then ''UpdateEvent else ''QueryEvent
              ty = AppT (ConT eventClass) (foldl AppT (ConT eventStructName) [ VarT tyvar | PlainTV tyvar <- tyvars ])
              structType = foldl appT (conT eventStructName) [ varT tyvar | PlainTV tyvar <- tyvars ]
