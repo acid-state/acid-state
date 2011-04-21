@@ -41,6 +41,8 @@ import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString.Lazy.Char8 as Lazy.Char8
 
 import Data.Serialize
+import Data.Serialize.Put
+import Data.Serialize.Get
 
 import Data.Typeable
 import Unsafe.Coerce (unsafeCoerce)
@@ -122,14 +124,11 @@ lookupColdMethod core (methodTag, methodContent)
     = case Map.lookup methodTag (coreMethods core) of
         Nothing      -> error $ "Method tag doesn't exist: " ++ show methodTag
         Just (Method method)
-          -> liftM (toLazy . encode) (method (lazyDecode methodContent))
+          -> liftM (lazyEncode) (method (lazyDecode methodContent))
 
-
--- XXX: Fixme when this code is available in cereal.
-toLazy bs = Lazy.fromChunks [bs]
-toStrict bs = Strict.concat (Lazy.toChunks bs)
+lazyEncode x = runPutLazy (put x)
 lazyDecode inp
-    = case decode (toStrict inp) of
+    = case runGetLazy get inp of
         Left msg  -> error msg
         Right val -> val
 

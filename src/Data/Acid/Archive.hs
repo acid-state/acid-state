@@ -74,7 +74,3 @@ readEntry
          if (crc16 content /= contentChecksum)
            then fail "Invalid hash"
            else return content
-
-lazyToStrict :: Lazy.ByteString -> Strict.ByteString
-lazyToStrict = Strict.concat . Lazy.toChunks
-

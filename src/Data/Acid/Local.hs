@@ -41,6 +41,8 @@ import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict
 
 import Data.Serialize
+import Data.Serialize.Put
+import Data.Serialize.Get
 import Data.Typeable
 import System.FilePath
 
@@ -114,7 +116,7 @@ update acidState event
            do let (result, st') = State.runState hotMethod st
               -- Schedule the log entry. Very important that it happens when 'localCore' is locked
               -- to ensure that events are logged in the same order that they are executed.
-              pushEntry (localEvents acidState) (methodTag event, Lazy.fromChunks [encode event]) $ putMVar mvar result
+              pushEntry (localEvents acidState) (methodTag event, runPutLazy (put event)) $ putMVar mvar result
               return st'
          takeMVar mvar
     where hotMethod = lookupHotMethod (localCore acidState) event
@@ -135,7 +137,7 @@ createCheckpoint acidState
     = do mvar <- newEmptyMVar
          withCoreState (localCore acidState) $ \st ->
            do eventId <- askCurrentEntryId (localEvents acidState)
-              pushEntry (localCheckpoints acidState) (Checkpoint eventId (Lazy.fromChunks [encode st])) (putMVar mvar ())
+              pushEntry (localCheckpoints acidState) (Checkpoint eventId (runPutLazy (put st))) (putMVar mvar ())
          takeMVar mvar
          
 
@@ -183,7 +185,7 @@ openAcidStateFrom directory initialState
                 Nothing
                   -> return 0
                 Just (Checkpoint eventCutOff content)
-                  -> do modifyCoreState_ core (\_oldState -> case decode (Strict.concat (Lazy.toChunks content)) of
+                  -> do modifyCoreState_ core (\_oldState -> case runGetLazy get content of
                                                                Left msg  -> error msg
                                                                Right val -> return val)
                         return eventCutOff

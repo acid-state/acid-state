@@ -217,38 +217,16 @@ pushEntry log object finally
          writeTVar (logNextEntryId log) (tid+1)
          (entries, actions) <- readTVar (logQueue log)
          writeTVar (logQueue log) ( encoded : entries, finally : actions )
-    where encoded = encode object
+    where encoded = Put.runPutLazy (Serialize.put object)
 
 askCurrentEntryId :: FileLog object -> IO EntryId
 askCurrentEntryId log
     = atomically $ readTVar (logNextEntryId log)
 
 
-encode :: Serialize object => object -> Lazy.ByteString
-encode object = Lazy.fromChunks [Put.runPut (Serialize.put object)]
-
--- XXX: Fixme when this code is available in cereal.
+-- FIXME: Check for unused input.
 decode' :: Serialize object => Lazy.ByteString -> object
 decode' inp
-    = case decode inp of
+    = case Get.runGetLazy Serialize.get inp of
         Left msg  -> error msg
         Right val -> val
-
--- XXX: Fixme when this code is available in cereal.
-decode :: Serialize object => Lazy.ByteString -> Either String object
-decode inp
-    = worker (Get.runGetPartial Serialize.get) (Lazy.toChunks inp)
-    where worker cont []
-              = case cont Strict.empty of
-                  Serialize.Done val rest
-                      | Strict.null rest  -> Right val
-                      | otherwise         -> Left "garbage after object"
-                  Serialize.Fail msg      -> Left msg
-                  Serialize.Partial cont' -> worker cont' []
-          worker cont (x:xs)
-              = case cont x of
-                  Serialize.Done val rest
-                      | Strict.null rest  -> Right val
-                      | otherwise         -> Left "garbage after object"
-                  Serialize.Fail msg      -> Left msg
-                  Serialize.Partial cont' -> worker cont' xs
