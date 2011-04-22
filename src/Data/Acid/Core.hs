@@ -32,18 +32,19 @@ module Data.Acid.Core
     , runColdMethod
     ) where
 
-import Control.Concurrent
-import Control.Monad
-import Control.Monad.State (State, runState )
+import Control.Concurrent                 ( MVar, newMVar, swapMVar, withMVar
+                                          , modifyMVar, modifyMVar_ )
+import Control.Monad                      ( liftM )
+import Control.Monad.State                ( State, runState )
 import qualified Data.Map as Map
-import qualified Data.ByteString.Lazy as Lazy
-import qualified Data.ByteString.Lazy.Char8 as Lazy.Char8
+import Data.ByteString.Lazy as Lazy       ( ByteString )
+import Data.ByteString.Lazy.Char8 as Lazy ( pack )
 
-import Data.Serialize
-import Data.SafeCopy
+import Data.Serialize                     ( runPutLazy, runGetLazy )
+import Data.SafeCopy                      ( SafeCopy, safeGet, safePut )
 
-import Data.Typeable
-import Unsafe.Coerce (unsafeCoerce)
+import Data.Typeable                      ( Typeable, typeOf )
+import Unsafe.Coerce                      ( unsafeCoerce )
 
 
 -- | The basic Method class. Each Method has an indexed result type
@@ -54,7 +55,7 @@ class ( Typeable ev, SafeCopy ev
     type MethodResult ev
     type MethodState ev
     methodTag :: ev -> Tag
-    methodTag ev = Lazy.Char8.pack (show (typeOf ev))
+    methodTag ev = Lazy.pack (show (typeOf ev))
 
 -- | The control structure at the very center of acid-state.
 --   This module provides access to a mutable state through

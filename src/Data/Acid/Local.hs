@@ -36,17 +36,18 @@ module Data.Acid.Local
 import Data.Acid.Log as Log
 import Data.Acid.Core
 
-import Control.Concurrent
-import qualified Control.Monad.State as State
-import Control.Monad.Reader
-import Control.Monad.Trans
-import Control.Applicative
-import qualified Data.ByteString.Lazy as Lazy
+import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar )
+import Control.Monad.State            ( MonadState, State, get, runState )
+import Control.Monad.Reader           ( Reader, runReader, MonadReader )
+import Control.Monad.Trans            ( MonadIO(liftIO) )
+import Control.Applicative            ( (<$>), (<*>) )
+import Data.ByteString.Lazy           ( ByteString )
 
-import Data.Serialize
-import Data.SafeCopy
-import Data.Typeable
-import System.FilePath
+import Data.Serialize                 ( runPutLazy, runGetLazy )
+import Data.SafeCopy                  ( SafeCopy(..), safeGet, safePut
+                                      , primitive, contain )
+import Data.Typeable                  ( Typeable, typeOf )
+import System.FilePath                ( (</>) )
 
 -- | Events return the same thing as Methods. The exact type of 'EventResult'
 --   depends on the event.
@@ -75,7 +76,7 @@ eventsToMethods :: [Event st] -> [MethodContainer st]
 eventsToMethods = map worker
     where worker :: Event st -> MethodContainer st
           worker (UpdateEvent fn) = Method (unUpdate . fn)
-          worker (QueryEvent fn)  = Method (\ev -> do st <- State.get
+          worker (QueryEvent fn)  = Method (\ev -> do st <- get
                                                       return (runReader (unQuery $ fn ev) st)
                                            )
 {-| State container offering full ACID (Atomicity, Consistency, Isolation and Durability)
@@ -94,13 +95,13 @@ eventsToMethods = map worker
 -}
 data AcidState st
     = AcidState { localCore        :: Core st
-                , localEvents      :: FileLog (Tagged Lazy.ByteString)
+                , localEvents      :: FileLog (Tagged ByteString)
                 , localCheckpoints :: FileLog Checkpoint
                 }
 
 -- | Context monad for Update events.
-newtype Update st a = Update { unUpdate :: State.State st a }
-    deriving (Monad, State.MonadState st)
+newtype Update st a = Update { unUpdate :: State st a }
+    deriving (Monad, MonadState st)
 
 -- | Context monad for Query events.
 newtype Query st a  = Query { unQuery :: Reader st a }
@@ -115,7 +116,7 @@ update :: UpdateEvent event => AcidState (EventState event) -> event -> IO (Even
 update acidState event
     = do mvar <- newEmptyMVar
          modifyCoreState_ (localCore acidState) $ \st ->
-           do let (result, st') = State.runState hotMethod st
+           do let (result, st') = runState hotMethod st
               -- Schedule the log entry. Very important that it happens when 'localCore' is locked
               -- to ensure that events are logged in the same order that they are executed.
               pushEntry (localEvents acidState) (methodTag event, runPutLazy (safePut event)) $ putMVar mvar result
@@ -154,7 +155,7 @@ createCheckpoint acidState
          
 
 
-data Checkpoint = Checkpoint EntryId Lazy.ByteString
+data Checkpoint = Checkpoint EntryId ByteString
 
 instance SafeCopy Checkpoint where
     kind = primitive

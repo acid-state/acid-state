@@ -59,6 +59,8 @@ Library
 
   Hs-Source-Dirs:      src/
 
+  GHC-Options:         -fwarn-unused-imports -fwarn-unused-binds
+
   -- Extra tools (e.g. alex, hsc2hs, ...) needed to build the source.
   -- Build-tools:         
   
