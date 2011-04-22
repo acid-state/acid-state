@@ -38,11 +38,9 @@ import qualified Control.Monad.State as State
 import Control.Monad.Reader
 import Control.Applicative
 import qualified Data.ByteString.Lazy as Lazy
-import qualified Data.ByteString as Strict
 
 import Data.Serialize
-import Data.Serialize.Put
-import Data.Serialize.Get
+import Data.SafeCopy
 import Data.Typeable
 import System.FilePath
 
@@ -116,7 +114,7 @@ update acidState event
            do let (result, st') = State.runState hotMethod st
               -- Schedule the log entry. Very important that it happens when 'localCore' is locked
               -- to ensure that events are logged in the same order that they are executed.
-              pushEntry (localEvents acidState) (methodTag event, runPutLazy (put event)) $ putMVar mvar result
+              pushEntry (localEvents acidState) (methodTag event, runPutLazy (safePut event)) $ putMVar mvar result
               return st'
          takeMVar mvar
     where hotMethod = lookupHotMethod (localCore acidState) event
@@ -132,25 +130,27 @@ query acidState event
 --   with this call.
 --   
 --   This call will not return until the operation has succeeded.
-createCheckpoint :: Serialize st => AcidState st -> IO ()
+createCheckpoint :: SafeCopy st => AcidState st -> IO ()
 createCheckpoint acidState
     = do mvar <- newEmptyMVar
          withCoreState (localCore acidState) $ \st ->
            do eventId <- askCurrentEntryId (localEvents acidState)
-              pushEntry (localCheckpoints acidState) (Checkpoint eventId (runPutLazy (put st))) (putMVar mvar ())
+              pushEntry (localCheckpoints acidState) (Checkpoint eventId (runPutLazy (safePut st))) (putMVar mvar ())
          takeMVar mvar
          
 
 
 data Checkpoint = Checkpoint EntryId Lazy.ByteString
 
-instance Serialize Checkpoint where
-    put (Checkpoint eventEntryId content)
-        = do put eventEntryId
-             put content
-    get = Checkpoint <$> get <*> get
+instance SafeCopy Checkpoint where
+    kind = primitive
+    putCopy (Checkpoint eventEntryId content)
+        = contain $
+          do safePut eventEntryId
+             safePut content
+    getCopy = contain $ Checkpoint <$> safeGet <*> safeGet
 
-class (Serialize st) => IsAcidic st where
+class (SafeCopy st) => IsAcidic st where
     acidEvents :: [Event st]
       -- ^ List of events capable of updating or querying the state.
 
@@ -185,7 +185,7 @@ openAcidStateFrom directory initialState
                 Nothing
                   -> return 0
                 Just (Checkpoint eventCutOff content)
-                  -> do modifyCoreState_ core (\_oldState -> case runGetLazy get content of
+                  -> do modifyCoreState_ core (\_oldState -> case runGetLazy safeGet content of
                                                                Left msg  -> error msg
                                                                Right val -> return val)
                         return eventCutOff

@@ -4,11 +4,11 @@ module Main (main) where
 import Data.Acid.Core
 import Data.Acid.Local
 
-import qualified Control.Monad.State as State
+import Control.Monad.State
 import Control.Monad.Reader
 import System.Environment
 import System.IO
-import Data.Serialize
+import Data.SafeCopy
 
 import Data.Typeable
 
@@ -18,16 +18,16 @@ import Data.Typeable
 data StressState = StressState !Int
     deriving (Show, Typeable)
 
-instance Serialize StressState where
-    put (StressState state) = put state
-    get = liftM StressState get
+instance SafeCopy StressState where
+    putCopy (StressState state) = contain $ safePut state
+    getCopy = contain $ liftM StressState safeGet
 
 ------------------------------------------------------
 -- The transaction we will execute over the state.
 
 pokeState :: Update StressState ()
-pokeState = do StressState i <- State.get
-               State.put (StressState (i+1))
+pokeState = do StressState i <- get
+               put (StressState (i+1))
 
 queryState :: Query StressState Int
 queryState = do StressState i <- ask
@@ -68,18 +68,18 @@ data QueryState = QueryState
 
 
 deriving instance Typeable PokeState
-instance Serialize PokeState where
-    put PokeState = return ()
-    get = return PokeState
+instance SafeCopy PokeState where
+    putCopy PokeState = contain $ return ()
+    getCopy = contain $ return PokeState
 instance Method PokeState where
     type MethodResult PokeState = ()
     type MethodState PokeState = StressState
 instance UpdateEvent PokeState
 
 deriving instance Typeable QueryState
-instance Serialize QueryState where
-    put QueryState = return ()
-    get = return QueryState
+instance SafeCopy QueryState where
+    putCopy QueryState = contain $ return ()
+    getCopy = contain $ return QueryState
 instance Method QueryState where
     type MethodResult QueryState = Int
     type MethodState QueryState = StressState

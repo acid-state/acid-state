@@ -36,13 +36,11 @@ import Control.Concurrent
 import Control.Monad
 import Control.Monad.State (State, runState )
 import qualified Data.Map as Map
-import qualified Data.ByteString as Strict
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString.Lazy.Char8 as Lazy.Char8
 
 import Data.Serialize
-import Data.Serialize.Put
-import Data.Serialize.Get
+import Data.SafeCopy
 
 import Data.Typeable
 import Unsafe.Coerce (unsafeCoerce)
@@ -50,8 +48,8 @@ import Unsafe.Coerce (unsafeCoerce)
 
 -- | The basic Method class. Each Method has an indexed result type
 --   and a unique tag.
-class ( Typeable ev, Serialize ev
-      , Typeable (MethodResult ev), Serialize (MethodResult ev)) =>
+class ( Typeable ev, SafeCopy ev
+      , Typeable (MethodResult ev), SafeCopy (MethodResult ev)) =>
       Method ev where
     type MethodResult ev
     type MethodState ev
@@ -83,7 +81,7 @@ mkCore methods initialValue
 -- | Mark Core as closed. Any subsequent use will throw an exception.
 closeCore :: Core st -> IO ()
 closeCore core
-    = do swapMVar (coreState core) errorMsg
+    = do _ <- swapMVar (coreState core) errorMsg
          return ()
     where errorMsg = error "Access failure: Core closed."
 
@@ -91,8 +89,8 @@ closeCore core
 --   WHNF.
 modifyCoreState :: Core st -> (st -> IO (st, a)) -> IO a
 modifyCoreState core action
-    = modifyMVar (coreState core) $ \st -> do (!st, a) <- action st
-                                              return (st, a)
+    = modifyMVar (coreState core) $ \st -> do (!st', a) <- action st
+                                              return (st', a)
 
 -- | Modify the state component. The resulting state is ensured to be in
 --   WHNF.
@@ -120,15 +118,15 @@ runColdMethod core taggedMethod
 
 -- | Find the state action that corresponds to a tagged and serialized method.
 lookupColdMethod :: Core st -> Tagged Lazy.ByteString -> (State st Lazy.ByteString)
-lookupColdMethod core (methodTag, methodContent)
-    = case Map.lookup methodTag (coreMethods core) of
-        Nothing      -> error $ "Method tag doesn't exist: " ++ show methodTag
+lookupColdMethod core (storedMethodTag, methodContent)
+    = case Map.lookup storedMethodTag (coreMethods core) of
+        Nothing      -> error $ "Method tag doesn't exist: " ++ show storedMethodTag
         Just (Method method)
-          -> liftM (lazyEncode) (method (lazyDecode methodContent))
+          -> liftM (runPutLazy . safePut) (method (lazyDecode methodContent))
 
-lazyEncode x = runPutLazy (put x)
+lazyDecode :: SafeCopy a => Lazy.ByteString -> a
 lazyDecode inp
-    = case runGetLazy get inp of
+    = case runGetLazy safeGet inp of
         Left msg  -> error msg
         Right val -> val
 

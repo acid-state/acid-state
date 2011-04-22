@@ -9,7 +9,7 @@ import Control.Monad.Reader
 import Control.Applicative
 import System.Environment
 import System.IO
-import Data.Serialize
+import Data.SafeCopy
 
 import Data.Typeable
 
@@ -24,9 +24,9 @@ type Value = String
 data KeyValue = KeyValue !(Map.Map Key Value)
     deriving (Typeable)
 
-instance Serialize KeyValue where
-    put (KeyValue state) = put state
-    get = liftM KeyValue get
+instance SafeCopy KeyValue where
+    putCopy (KeyValue state) = contain $ safePut state
+    getCopy = contain $ liftM KeyValue safeGet
 
 ------------------------------------------------------
 -- The transaction we will execute over the state.
@@ -72,18 +72,18 @@ data LookupKey = LookupKey Key
 
 
 deriving instance Typeable InsertKey
-instance Serialize InsertKey where
-    put (InsertKey key value) = put key >> put value
-    get = InsertKey <$> get <*> get
+instance SafeCopy InsertKey where
+    putCopy (InsertKey key value) = contain $ safePut key >> safePut value
+    getCopy = contain $ InsertKey <$> safeGet <*> safeGet
 instance Method InsertKey where
     type MethodResult InsertKey = ()
     type MethodState InsertKey = KeyValue
 instance UpdateEvent InsertKey
 
 deriving instance Typeable LookupKey
-instance Serialize LookupKey where
-    put (LookupKey key) = put key
-    get = LookupKey <$> get
+instance SafeCopy LookupKey where
+    putCopy (LookupKey key) = contain $ safePut key
+    getCopy = contain $ LookupKey <$> safeGet
 instance Method LookupKey where
     type MethodResult LookupKey = Maybe Value
     type MethodState LookupKey = KeyValue

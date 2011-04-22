@@ -1,15 +1,14 @@
 {-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
 module Main (main) where
 
-import Data.Acid.Core
 import Data.Acid
 
-import qualified Control.Monad.State as State
+import Control.Monad.State
 import Control.Monad.Reader
 import Control.Applicative
 import System.Environment
 import System.IO
-import Data.Serialize
+import Data.SafeCopy
 
 import Data.Typeable
 
@@ -24,17 +23,15 @@ type Value = String
 data KeyValue = KeyValue !(Map.Map Key Value)
     deriving (Typeable)
 
-instance Serialize KeyValue where
-    put (KeyValue state) = put state
-    get = liftM KeyValue get
+$(deriveSafeCopy 0 'base ''KeyValue)
 
 ------------------------------------------------------
 -- The transaction we will execute over the state.
 
 insertKey :: Key -> Value -> Update KeyValue ()
 insertKey key value
-    = do KeyValue m <- State.get
-         State.put (KeyValue (Map.insert key value m))
+    = do KeyValue m <- get
+         put (KeyValue (Map.insert key value m))
 
 lookupKey :: Key -> Query KeyValue (Maybe Value)
 lookupKey key

@@ -9,7 +9,7 @@ import Language.Haskell.TH
 import Data.Acid.Core
 import Data.Acid.Local
 
-import Data.Serialize
+import Data.SafeCopy
 import Data.Typeable
 import Data.Char
 import Control.Applicative
@@ -52,12 +52,12 @@ makeAcidic stateName eventNames
                  _ -> error "Unsupported state type. Only 'data' and 'newtype' are supported."
            _ -> error "Given state is not a type."
 
-makeEvent :: Name -> Name -> Q [Dec]
-makeEvent eventName stateName
+makeEvent :: Name -> Q [Dec]
+makeEvent eventName
     = do eventInfo <- reify eventName
          eventType <- getEventType eventName
          d <- makeEventDataType eventName eventType
-         b <- makeSerializeInstance eventName eventType
+         b <- makeSafeCopyInstance eventName eventType
          i <- makeMethodInstance eventName eventType
          e <- makeEventInstance eventName eventType
          return [d,b,i,e]
@@ -70,11 +70,11 @@ getEventType eventName
              -> return eventType
            _ -> error $ "Events must be functions: " ++ show eventName
 
---instance (Serialize key, Typeable key, Serialize val, Typeable val) => IsAcidic State where
+--instance (SafeCopy key, Typeable key, SafeCopy val, Typeable val) => IsAcidic State where
 --  acidEvents = [ UpdateEven (\(MyUpdateEvent arg1 arg2 -> myUpdateEvent arg1 arg2) ]
 makeIsAcidic eventNames stateName tyvars constructors
     = do types <- mapM getEventType eventNames
-         let preds = [ ''Serialize, ''Typeable ]
+         let preds = [ ''SafeCopy, ''Typeable ]
              ty = appT (conT ''IsAcidic) stateType
              handlers = map (uncurry makeEventHandler) (zip eventNames types)
          instanceD (mkCxtFromTyVars preds tyvars []) ty
@@ -103,25 +103,26 @@ makeEventDataType eventName eventType
           structName [] = []
           structName (x:xs) = toUpper x : xs
 
--- instance (Serialize key, Serialize val) => Serialize (MyUpdateEvent key val) where
+-- instance (SafeCopy key, SafeCopy val) => SafeCopy (MyUpdateEvent key val) where
 --    put (MyUpdateEvent a b) = do put a; put b
 --    get = MyUpdateEvent <$> get <*> get
-makeSerializeInstance eventName eventType
-    = do let preds = [ ''Serialize ]
-             ty = AppT (ConT ''Serialize) (foldl AppT (ConT eventStructName) [ VarT tyvar | PlainTV tyvar <- tyvars ])
+makeSafeCopyInstance eventName eventType
+    = do let preds = [ ''SafeCopy ]
+             ty = AppT (ConT ''SafeCopy) (foldl AppT (ConT eventStructName) [ VarT tyvar | PlainTV tyvar <- tyvars ])
 
              getBase = appE (varE 'return) (conE eventStructName)
-             getArgs = foldl (\a b -> infixE (Just a) (varE '(<*>)) (Just (varE 'get))) getBase args
+             getArgs = foldl (\a b -> infixE (Just a) (varE '(<*>)) (Just (varE 'safeGet))) getBase args
+             contained val = varE 'contain `appE` val
 
          putVars <- replicateM (length args) (newName "arg")
          let putClause = conP eventStructName [varP var | var <- putVars ]
-             putExp    = doE $ [ noBindS $ appE (varE 'put) (varE var) | var <- putVars ] ++
+             putExp    = doE $ [ noBindS $ appE (varE 'safePut) (varE var) | var <- putVars ] ++
                                [ noBindS $ appE (varE 'return) (tupE []) ]
 
          instanceD (mkCxtFromTyVars preds tyvars context)
                    (return ty)
-                   [ funD 'put [clause [putClause] (normalB putExp) []]
-                   , valD (varP 'get) (normalB getArgs) []
+                   [ funD 'putCopy [clause [putClause] (normalB (contained putExp)) []]
+                   , valD (varP 'getCopy) (normalB (contained getArgs)) []
                    ]
     where (tyvars, context, args, stateType, resultType, isUpdate) = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
@@ -133,13 +134,13 @@ mkCxtFromTyVars preds tyvars extraContext
             map return extraContext
 
 {-
-instance (Serialize key, Typeable key
-         ,Serialize val, Typeable val) => Method (MyUpdateEvent key val) where
+instance (SafeCopy key, Typeable key
+         ,SafeCopy val, Typeable val) => Method (MyUpdateEvent key val) where
   type MethodResult (MyUpdateEvent key val) = Return
   type MethodState (MyUpdateEvent key val) = State key val
 -}
 makeMethodInstance eventName eventType
-    = do let preds = [ ''Serialize, ''Typeable ]
+    = do let preds = [ ''SafeCopy, ''Typeable ]
              ty = AppT (ConT ''Method) (foldl AppT (ConT eventStructName) [ VarT tyvar | PlainTV tyvar <- tyvars ])
              structType = foldl appT (conT eventStructName) [ varT tyvar | PlainTV tyvar <- tyvars ]
          instanceD (cxt $ [ classP classPred [varT tyvar] | PlainTV tyvar <- tyvars, classPred <- preds ] ++ map return context)
@@ -152,10 +153,10 @@ makeMethodInstance eventName eventType
           structName [] = []
           structName (x:xs) = toUpper x : xs
 
---instance (Serialize key, Typeable key
---         ,Serialize val, Typeable val) => UpdateEvent (MyUpdateEvent key val)
+--instance (SafeCopy key, Typeable key
+--         ,SafeCopy val, Typeable val) => UpdateEvent (MyUpdateEvent key val)
 makeEventInstance eventName eventType
-    = do let preds = [ ''Serialize, ''Typeable ]
+    = do let preds = [ ''SafeCopy, ''Typeable ]
              eventClass = if isUpdate then ''UpdateEvent else ''QueryEvent
              ty = AppT (ConT eventClass) (foldl AppT (ConT eventStructName) [ VarT tyvar | PlainTV tyvar <- tyvars ])
              structType = foldl appT (conT eventStructName) [ varT tyvar | PlainTV tyvar <- tyvars ]
@@ -193,6 +194,6 @@ analyseType eventName t
 
 makeAcidic' :: [Name] -> Name -> [TyVarBndr] -> [Con] -> Q [Dec]
 makeAcidic' eventNames stateName tyvars constructors
-    = do events <- sequence [ makeEvent eventName stateName | eventName <- eventNames ]
+    = do events <- sequence [ makeEvent eventName | eventName <- eventNames ]
          acidic <- makeIsAcidic eventNames stateName tyvars constructors
          return $ acidic : concat events

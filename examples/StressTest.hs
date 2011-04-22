@@ -1,14 +1,13 @@
 {-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
 module Main (main) where
 
-import Data.Acid.Core
 import Data.Acid
 
-import qualified Control.Monad.State as State
+import Control.Monad.State
 import Control.Monad.Reader
 import System.Environment
 import System.IO
-import Data.Serialize
+import Data.SafeCopy
 
 import Data.Typeable
 
@@ -18,16 +17,14 @@ import Data.Typeable
 data StressState = StressState !Int
     deriving (Show, Typeable)
 
-instance Serialize StressState where
-    put (StressState state) = put state
-    get = liftM StressState get
+$(deriveSafeCopy 0 'base ''StressState)
 
 ------------------------------------------------------
 -- The transaction we will execute over the state.
 
 pokeState :: Update StressState ()
-pokeState = do StressState i <- State.get
-               State.put (StressState (i+1))
+pokeState = do StressState i <- get
+               put (StressState (i+1))
 
 queryState :: Query StressState Int
 queryState = do StressState i <- ask

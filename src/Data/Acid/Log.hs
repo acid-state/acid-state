@@ -22,13 +22,11 @@ import Control.Monad
 import Control.Concurrent
 import Control.Concurrent.STM
 import qualified Data.ByteString.Lazy as Lazy
-import qualified Data.ByteString as Strict
 import Data.List
 import Data.Maybe
-import Data.Serialize                            ( Serialize )
-import qualified Data.Serialize as Serialize
 import qualified Data.Serialize.Get as Get
 import qualified Data.Serialize.Put as Put
+import Data.SafeCopy                             ( safePut, safeGet, SafeCopy )
 
 import Text.Printf                               ( printf )
 
@@ -79,11 +77,11 @@ openFileLog identifier
          queue <- newTVarIO ([], [])
          nextEntryRef <- newTVarIO 0
          tid2 <- forkIO $ fileWriter currentState queue
-         let log = FileLog { logIdentifier  = identifier
-                           , logCurrent     = currentState
-                           , logNextEntryId = nextEntryRef
-                           , logQueue       = queue
-                           , logThreads     = [tid2] }
+         let fLog = FileLog { logIdentifier  = identifier
+                            , logCurrent     = currentState
+                            , logNextEntryId = nextEntryRef
+                            , logQueue       = queue
+                            , logThreads     = [tid2] }
          if null logFiles
             then do let currentEntryId = 0
                     currentHandle <- openBinaryFile (logDirectory identifier </> formatLogFile (logPrefix identifier) currentEntryId) WriteMode
@@ -94,8 +92,9 @@ openFileLog identifier
                     atomically $ writeTVar nextEntryRef currentEntryId
                     currentHandle <- openFile (logDirectory identifier </> formatLogFile (logPrefix identifier) currentEntryId) WriteMode
                     putMVar currentState currentHandle
-         return log
+         return fLog
 
+fileWriter :: MVar Handle -> TVar ([Lazy.ByteString], [IO ()]) -> IO ()
 fileWriter currentState queue
     = forever $
       do (entries, actions) <- atomically $ do (entries, actions) <- readTVar queue
@@ -114,10 +113,10 @@ fileWriter currentState queue
 
 
 closeFileLog :: FileLog object -> IO ()
-closeFileLog log
-    = modifyMVar_ (logCurrent log) $ \handle ->
+closeFileLog fLog
+    = modifyMVar_ (logCurrent fLog) $ \handle ->
       do hClose handle
-         forkIO $ forM_ (logThreads log) killThread
+         _ <- forkIO $ forM_ (logThreads fLog) killThread
          return $ error "FileLog has been closed"
 
 readEntities :: FilePath -> IO [Lazy.ByteString]
@@ -132,13 +131,13 @@ readEntities path
 -- Read all durable entries younger than the given EntryId.
 -- Note that entries written during or after this call won't
 -- be included in the returned list.
-readEntriesFrom :: Serialize object => FileLog object -> EntryId -> IO [object]
-readEntriesFrom log youngestEntry
+readEntriesFrom :: SafeCopy object => FileLog object -> EntryId -> IO [object]
+readEntriesFrom fLog youngestEntry
     = do -- Cut the log so we can read written entries without interfering
          -- with the writing of new entries.
-         entryCap <- cutFileLog log
+         entryCap <- cutFileLog fLog
          -- We're interested in these entries: youngestEntry <= x < entryCap.
-         logFiles <- findLogFiles (logIdentifier log)
+         logFiles <- findLogFiles (logIdentifier fLog)
          let sorted = sort logFiles
              findRelevant [] = []
              findRelevant [ logFile ]
@@ -169,32 +168,32 @@ readEntriesFrom log youngestEntry
 
 
 cutFileLog :: FileLog object -> IO EntryId
-cutFileLog log
+cutFileLog fLog
     = do mvar <- newEmptyMVar
          let action = do currentEntryId <- atomically $
-                                           do (entries, _) <- readTVar (logQueue log)
-                                              next <- readTVar (logNextEntryId log)
+                                           do (entries, _) <- readTVar (logQueue fLog)
+                                              next <- readTVar (logNextEntryId fLog)
                                               return (next - length entries)
-                         modifyMVar_ (logCurrent log) $ \old ->
+                         modifyMVar_ (logCurrent fLog) $ \old ->
                            do hClose old
                               openFile (logDirectory key </> formatLogFile (logPrefix key) currentEntryId) WriteMode
                          putMVar mvar currentEntryId
          atomically $
-           do (entries, actions) <- readTVar (logQueue log)
-              writeTVar (logQueue log) (entries, action : actions)
+           do (entries, actions) <- readTVar (logQueue fLog)
+              writeTVar (logQueue fLog) (entries, action : actions)
          takeMVar mvar
-    where key = logIdentifier log
+    where key = logIdentifier fLog
 
 -- Finds the newest entry in the log. Doesn't work on open logs.
 -- Do not use after the log has been opened.
 -- Implementation: Search the newest log files first. Once a file
 --                 containing at least one valid entry is found,
 --                 return the last entry in that file.
-newestEntry :: Serialize object => LogKey object -> IO (Maybe object)
+newestEntry :: SafeCopy object => LogKey object -> IO (Maybe object)
 newestEntry identifier
     = do logFiles <- findLogFiles identifier
          let sorted = reverse $ sort logFiles
-             (eventIds, files) = unzip sorted
+             (_eventIds, files) = unzip sorted
          archives <- mapM Lazy.readFile files
          return $ worker archives
     where worker [] = Nothing
@@ -210,23 +209,23 @@ newestEntry identifier
 -- Schedule a new log entry. This call does not block
 -- The given IO action runs once the object is durable. The IO action
 -- blocks the serialization of events so it should be swift.
-pushEntry :: Serialize object => FileLog object -> object -> IO () -> IO ()
-pushEntry log object finally
+pushEntry :: SafeCopy object => FileLog object -> object -> IO () -> IO ()
+pushEntry fLog object finally
     = atomically $
-      do tid <- readTVar (logNextEntryId log)
-         writeTVar (logNextEntryId log) (tid+1)
-         (entries, actions) <- readTVar (logQueue log)
-         writeTVar (logQueue log) ( encoded : entries, finally : actions )
-    where encoded = Put.runPutLazy (Serialize.put object)
+      do tid <- readTVar (logNextEntryId fLog)
+         writeTVar (logNextEntryId fLog) (tid+1)
+         (entries, actions) <- readTVar (logQueue fLog)
+         writeTVar (logQueue fLog) ( encoded : entries, finally : actions )
+    where encoded = Put.runPutLazy (safePut object)
 
 askCurrentEntryId :: FileLog object -> IO EntryId
-askCurrentEntryId log
-    = atomically $ readTVar (logNextEntryId log)
+askCurrentEntryId fLog
+    = atomically $ readTVar (logNextEntryId fLog)
 
 
 -- FIXME: Check for unused input.
-decode' :: Serialize object => Lazy.ByteString -> object
+decode' :: SafeCopy object => Lazy.ByteString -> object
 decode' inp
-    = case Get.runGetLazy Serialize.get inp of
+    = case Get.runGetLazy safeGet inp of
         Left msg  -> error msg
         Right val -> val

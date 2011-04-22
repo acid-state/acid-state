@@ -7,7 +7,7 @@ import Data.Acid
 import qualified Control.Monad.State as State
 import Control.Monad.Reader
 import System.Environment
-import Data.Serialize
+import Data.SafeCopy
 
 import Data.Typeable
 
@@ -17,9 +17,7 @@ import Data.Typeable
 data HelloWorldState = HelloWorldState String
     deriving (Show, Typeable)
 
-instance Serialize HelloWorldState where
-    put (HelloWorldState state) = put state
-    get = liftM HelloWorldState get
+$(deriveSafeCopy 0 'base ''HelloWorldState)
 
 ------------------------------------------------------
 -- The transaction we will execute over the state.

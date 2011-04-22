@@ -7,7 +7,7 @@ import Data.Acid.Local
 import qualified Control.Monad.State as State
 import Control.Monad.Reader
 import System.Environment
-import Data.Serialize
+import Data.SafeCopy
 
 import Data.Typeable
 
@@ -17,9 +17,9 @@ import Data.Typeable
 data HelloWorldState = HelloWorldState String
     deriving (Show, Typeable)
 
-instance Serialize HelloWorldState where
-    put (HelloWorldState state) = put state
-    get = liftM HelloWorldState get
+instance SafeCopy HelloWorldState where
+    putCopy (HelloWorldState state) = contain $ safePut state
+    getCopy = contain $ liftM HelloWorldState safeGet
 
 ------------------------------------------------------
 -- The transaction we will execute over the state.
@@ -55,18 +55,18 @@ data QueryState = QueryState
 
 
 deriving instance Typeable WriteState
-instance Serialize WriteState where
-    put (WriteState st) = put st
-    get = liftM WriteState get
+instance SafeCopy WriteState where
+    putCopy (WriteState st) = contain $ safePut st
+    getCopy = contain $ liftM WriteState safeGet
 instance Method WriteState where
     type MethodResult WriteState = ()
     type MethodState WriteState = HelloWorldState
 instance UpdateEvent WriteState
 
 deriving instance Typeable QueryState
-instance Serialize QueryState where
-    put QueryState = return ()
-    get = return QueryState
+instance SafeCopy QueryState where
+    putCopy QueryState = contain $ return ()
+    getCopy = contain $ return QueryState
 instance Method QueryState where
     type MethodResult QueryState = String
     type MethodState QueryState = HelloWorldState

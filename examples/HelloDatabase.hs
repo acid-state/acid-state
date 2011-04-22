@@ -7,14 +7,12 @@ import Control.Monad.State                   ( get, put )
 import Control.Monad.Reader                  ( ask )
 import Control.Applicative                   ( (<$>) )
 import System.Environment                    ( getArgs )
-import qualified Data.Serialize as Serialize
+import Data.SafeCopy
 
 type Message = String
 data Database = Database [Message]
 
-instance Serialize.Serialize Database where
-    get = Database <$> Serialize.get
-    put (Database msg) = Serialize.put msg
+$(deriveSafeCopy 0 'base ''Database)
 
 -- Transactions are defined to run in either the 'Update' monad
 -- or the 'Query' monad.                                                                                                                                    
