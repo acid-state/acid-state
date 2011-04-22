@@ -21,7 +21,10 @@ module Data.Acid
     , createCheckpoint
     , update
     , query
+    , update'
+    , query'
     , EventResult
+    , EventState
     , UpdateEvent
     , QueryEvent
     , Update

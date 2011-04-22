@@ -18,6 +18,7 @@ module Data.Acid.Local
     , AcidState
     , Event(..)
     , EventResult
+    , EventState
     , UpdateEvent
     , QueryEvent
     , Update
@@ -28,6 +29,8 @@ module Data.Acid.Local
     , createCheckpoint
     , update
     , query
+    , update'
+    , query'
     ) where
 
 import Data.Acid.Log as Log
@@ -36,6 +39,7 @@ import Data.Acid.Core
 import Control.Concurrent
 import qualified Control.Monad.State as State
 import Control.Monad.Reader
+import Control.Monad.Trans
 import Control.Applicative
 import qualified Data.ByteString.Lazy as Lazy
 
@@ -119,10 +123,20 @@ update acidState event
          takeMVar mvar
     where hotMethod = lookupHotMethod (localCore acidState) event
 
+-- | Same as 'update' but lifted into any monad capable of doing IO.
+update' :: (UpdateEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
+update' acidState event
+    = liftIO (update acidState event)
+
 -- | Issue a Query event and wait for its result. Events may be issued in parallel.
 query  :: QueryEvent event  => AcidState (EventState event) -> event -> IO (EventResult event)
 query acidState event
     = runHotMethod (localCore acidState) event
+
+-- | Same as 'query' but lifted into any monad capable of doing IO.
+query' :: (QueryEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
+query' acidState event
+    = liftIO (query acidState event)
 
 -- | Take a snapshot of the state and save it to disk. Creating checkpoints
 --   makes it faster to resume AcidStates and you're free to create them as
