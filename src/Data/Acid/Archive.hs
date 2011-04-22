@@ -71,6 +71,6 @@ readEntry
     = do contentLength <- getWord64le
          contentChecksum <-getWord16le
          content <- getLazyByteString (fromIntegral contentLength)
-         if (crc16 content /= contentChecksum)
+         if crc16 content /= contentChecksum
            then fail "Invalid hash"
            else return content

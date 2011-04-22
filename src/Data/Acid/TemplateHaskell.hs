@@ -76,7 +76,7 @@ makeIsAcidic eventNames stateName tyvars constructors
     = do types <- mapM getEventType eventNames
          let preds = [ ''SafeCopy, ''Typeable ]
              ty = appT (conT ''IsAcidic) stateType
-             handlers = map (uncurry makeEventHandler) (zip eventNames types)
+             handlers = zipWith makeEventHandler eventNames types
          instanceD (mkCxtFromTyVars preds tyvars []) ty
                    [ valD (varP 'acidEvents) (normalB (listE handlers)) [] ]
     where stateType = foldl appT (conT stateName) [ varT var | PlainTV var <- tyvars ]
@@ -172,9 +172,9 @@ makeEventInstance eventName eventType
 analyseType :: Name -> Type -> ([TyVarBndr], Cxt, [Type], Type, Type, Bool)
 analyseType eventName t
     = let (tyvars, cxt, t') = case t of
-                                ForallT binds [] t' -> 
+                                ForallT binds [] t' ->
                                   (binds, [], t')
-                                ForallT binds cxt t' -> 
+                                ForallT binds cxt t' ->
                                   error $ "Context restrictions on events aren't supported yet: " ++ show eventName
                                 _ -> ([], [], t)
           args = getArgs t'

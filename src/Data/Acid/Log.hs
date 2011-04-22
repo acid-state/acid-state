@@ -37,7 +37,7 @@ type EntryId = Int
 
 data FileLog object
     = FileLog { logIdentifier  :: LogKey object
-              , logCurrent     :: MVar (Handle)
+              , logCurrent     :: MVar Handle
               , logNextEntryId :: TVar EntryId
               , logQueue       :: TVar ([Lazy.ByteString], [IO ()])
               , logThreads     :: [ThreadId]
@@ -158,7 +158,7 @@ readEntriesFrom fLog youngestEntry
                               []                     -> 0
                               ( logFile : _logFiles) -> rangeStart logFile
 
-         archive <- liftM Lazy.concat $ mapM Lazy.readFile (map snd relevant)
+         archive <- liftM Lazy.concat $ mapM (Lazy.readFile . snd) relevant
          let entries = entriesToList $ readEntries archive
          return $ map decode'
                 $ take (entryCap - youngestEntry)             -- Take events under the eventCap.

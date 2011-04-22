@@ -118,7 +118,7 @@ runColdMethod core taggedMethod
          return ( st', a)
 
 -- | Find the state action that corresponds to a tagged and serialized method.
-lookupColdMethod :: Core st -> Tagged Lazy.ByteString -> (State st Lazy.ByteString)
+lookupColdMethod :: Core st -> Tagged Lazy.ByteString -> State st Lazy.ByteString
 lookupColdMethod core (storedMethodTag, methodContent)
     = case Map.lookup storedMethodTag (coreMethods core) of
         Nothing      -> error $ "Method tag doesn't exist: " ++ show storedMethodTag
