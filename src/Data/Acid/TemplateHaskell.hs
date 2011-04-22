@@ -88,7 +88,7 @@ makeEventHandler eventName eventType
          let lamClause = conP eventStructName [varP var | var <- vars ]
          conE constr `appE` lamE [lamClause] (foldl appE (varE eventName) (map varE vars))
     where constr = if isUpdate then 'UpdateEvent else 'QueryEvent
-          (tyvars, cxt, args, stateType, resultType, isUpdate) = analyseType eventName eventType
+          (_tyvars, _cxt, args, _stateType, _resultType, isUpdate) = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
@@ -98,7 +98,7 @@ makeEventHandler eventName eventType
 makeEventDataType eventName eventType
     = do let con = normalC eventStructName [ strictType notStrict (return arg) | arg <- args ]
          dataD (return cxt) eventStructName tyvars [con] [''Typeable]
-    where (tyvars, cxt, args, stateType, resultType, isUpdate) = analyseType eventName eventType
+    where (tyvars, cxt, args, _stateType, _resultType, _isUpdate) = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
@@ -124,7 +124,7 @@ makeSafeCopyInstance eventName eventType
                    [ funD 'putCopy [clause [putClause] (normalB (contained putExp)) []]
                    , valD (varP 'getCopy) (normalB (contained getArgs)) []
                    ]
-    where (tyvars, context, args, stateType, resultType, isUpdate) = analyseType eventName eventType
+    where (tyvars, context, args, _stateType, _resultType, _isUpdate) = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
@@ -148,7 +148,7 @@ makeMethodInstance eventName eventType
                    [ tySynInstD ''MethodResult [structType] (return resultType)
                    , tySynInstD ''MethodState  [structType] (return stateType)
                    ]
-    where (tyvars, context, args, stateType, resultType, isUpdate) = analyseType eventName eventType
+    where (tyvars, context, _args, stateType, resultType, _isUpdate) = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
@@ -159,11 +159,10 @@ makeEventInstance eventName eventType
     = do let preds = [ ''SafeCopy, ''Typeable ]
              eventClass = if isUpdate then ''UpdateEvent else ''QueryEvent
              ty = AppT (ConT eventClass) (foldl AppT (ConT eventStructName) [ VarT tyvar | PlainTV tyvar <- tyvars ])
-             structType = foldl appT (conT eventStructName) [ varT tyvar | PlainTV tyvar <- tyvars ]
          instanceD (cxt $ [ classP classPred [varT tyvar] | PlainTV tyvar <- tyvars, classPred <- preds ] ++ map return context)
                    (return ty)
                    []
-    where (tyvars, context, args, stateType, resultType, isUpdate) = analyseType eventName eventType
+    where (tyvars, context, _args, _stateType, _resultType, isUpdate) = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
