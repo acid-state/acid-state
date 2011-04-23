@@ -9,6 +9,7 @@ module Data.Acid.Log
     , openFileLog
     , closeFileLog
     , pushEntry
+    , pushAction
     , readEntriesFrom
     , newestEntry
     , askCurrentEntryId
@@ -178,9 +179,7 @@ cutFileLog fLog
                            do hClose old
                               openFile (logDirectory key </> formatLogFile (logPrefix key) currentEntryId) WriteMode
                          putMVar mvar currentEntryId
-         atomically $
-           do (entries, actions) <- readTVar (logQueue fLog)
-              writeTVar (logQueue fLog) (entries, action : actions)
+         pushAction fLog action
          takeMVar mvar
     where key = logIdentifier fLog
 
@@ -217,6 +216,13 @@ pushEntry fLog object finally
          (entries, actions) <- readTVar (logQueue fLog)
          writeTVar (logQueue fLog) ( encoded : entries, finally : actions )
     where encoded = Put.runPutLazy (safePut object)
+
+-- The given IO action is executed once all previous entries are durable.
+pushAction :: FileLog object -> IO () -> IO ()
+pushAction fLog finally
+    = atomically $
+      do (entries, actions) <- readTVar (logQueue fLog)
+         writeTVar (logQueue fLog) (entries, finally : actions)
 
 askCurrentEntryId :: FileLog object -> IO EntryId
 askCurrentEntryId fLog

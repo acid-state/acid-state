@@ -133,7 +133,15 @@ update' acidState event
 -- | Issue a Query event and wait for its result. Events may be issued in parallel.
 query  :: QueryEvent event  => AcidState (EventState event) -> event -> IO (EventResult event)
 query acidState event
-    = runHotMethod (localCore acidState) event
+    = do mvar <- newEmptyMVar
+         withCoreState (localCore acidState) $ \st ->
+           do let (result, _st) = runState hotMethod st
+              -- Make sure that we do not return the result before the event log has
+              -- been flushed to disk.
+              pushAction (localEvents acidState) $
+                putMVar mvar result
+         takeMVar mvar
+    where hotMethod = lookupHotMethod (localCore acidState) event
 
 -- | Same as 'query' but lifted into any monad capable of doing IO.
 query' :: (QueryEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
@@ -151,7 +159,8 @@ createCheckpoint acidState
     = do mvar <- newEmptyMVar
          withCoreState (localCore acidState) $ \st ->
            do eventId <- askCurrentEntryId (localEvents acidState)
-              pushEntry (localCheckpoints acidState) (Checkpoint eventId (runPutLazy (safePut st))) (putMVar mvar ())
+              pushAction (localEvents acidState) $
+                pushEntry (localCheckpoints acidState) (Checkpoint eventId (runPutLazy (safePut st))) (putMVar mvar ())
          takeMVar mvar
 
 -- | Save a snapshot to disk and close the AcidState as a single atomic
@@ -162,7 +171,8 @@ createCheckpointAndClose acidState
     = do mvar <- newEmptyMVar
          closeCore' (localCore acidState) $ \st ->
            do eventId <- askCurrentEntryId (localEvents acidState)
-              pushEntry (localCheckpoints acidState) (Checkpoint eventId (runPutLazy (safePut st))) (putMVar mvar ())
+              pushAction (localEvents acidState) $
+                pushEntry (localCheckpoints acidState) (Checkpoint eventId (runPutLazy (safePut st))) (putMVar mvar ())
          takeMVar mvar
          closeFileLog (localEvents acidState)
          closeFileLog (localCheckpoints acidState)
