@@ -27,6 +27,7 @@ module Data.Acid.Local
     , openAcidStateFrom
     , closeAcidState
     , createCheckpoint
+    , createCheckpointAndClose
     , update
     , query
     , update'
@@ -152,7 +153,19 @@ createCheckpoint acidState
            do eventId <- askCurrentEntryId (localEvents acidState)
               pushEntry (localCheckpoints acidState) (Checkpoint eventId (runPutLazy (safePut st))) (putMVar mvar ())
          takeMVar mvar
-         
+
+-- | Save a snapshot to disk and close the AcidState as a single atomic
+--   action. This is useful when you want to make sure that no events
+--   are saved to disk after a checkpoint.
+createCheckpointAndClose :: SafeCopy st => AcidState st -> IO ()
+createCheckpointAndClose acidState
+    = do mvar <- newEmptyMVar
+         closeCore' (localCore acidState) $ \st ->
+           do eventId <- askCurrentEntryId (localEvents acidState)
+              pushEntry (localCheckpoints acidState) (Checkpoint eventId (runPutLazy (safePut st))) (putMVar mvar ())
+         takeMVar mvar
+         closeFileLog (localEvents acidState)
+         closeFileLog (localCheckpoints acidState)
 
 
 data Checkpoint = Checkpoint EntryId ByteString

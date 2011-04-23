@@ -23,6 +23,7 @@ module Data.Acid.Core
     , Tagged
     , mkCore
     , closeCore
+    , closeCore'
     , modifyCoreState
     , modifyCoreState_
     , withCoreState
@@ -32,7 +33,7 @@ module Data.Acid.Core
     , runColdMethod
     ) where
 
-import Control.Concurrent                 ( MVar, newMVar, swapMVar, withMVar
+import Control.Concurrent                 ( MVar, newMVar, withMVar
                                           , modifyMVar, modifyMVar_ )
 import Control.Monad                      ( liftM )
 import Control.Monad.State                ( State, runState )
@@ -82,8 +83,15 @@ mkCore methods initialValue
 -- | Mark Core as closed. Any subsequent use will throw an exception.
 closeCore :: Core st -> IO ()
 closeCore core
-    = do _ <- swapMVar (coreState core) errorMsg
-         return ()
+    = closeCore' core (\_st -> return ())
+
+-- | Access the state and then mark the Core as closed. Any subsequent use
+--   will throw an exception.
+closeCore' :: Core st -> (st -> IO ()) -> IO ()
+closeCore' core action
+    = modifyMVar_ (coreState core) $ \st ->
+      do action st
+         return errorMsg
     where errorMsg = error "Access failure: Core closed."
 
 -- | Modify the state component. The resulting state is ensured to be in
