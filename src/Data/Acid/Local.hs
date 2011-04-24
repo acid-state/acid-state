@@ -224,7 +224,7 @@ openAcidStateFrom directory initialState
                   -> return 0
                 Just (Checkpoint eventCutOff content)
                   -> do modifyCoreState_ core (\_oldState -> case runGetLazy safeGet content of
-                                                               Left msg  -> error msg
+                                                               Left msg  -> checkpointRestoreError msg
                                                                Right val -> return val)
                         return eventCutOff
          
@@ -236,6 +236,9 @@ openAcidStateFrom directory initialState
                           , localEvents = eventsLog
                           , localCheckpoints = checkpointsLog
                           }
+
+checkpointRestoreError msg
+    = error $ "Could not parse saved checkpoint due to the following error: " ++ msg
 
 -- | Close an AcidState and associated logs.
 --   Any subsequent usage of the AcidState will throw an exception.

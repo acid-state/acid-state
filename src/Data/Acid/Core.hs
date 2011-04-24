@@ -39,7 +39,7 @@ import Control.Monad                      ( liftM )
 import Control.Monad.State                ( State, runState )
 import qualified Data.Map as Map
 import Data.ByteString.Lazy as Lazy       ( ByteString )
-import Data.ByteString.Lazy.Char8 as Lazy ( pack )
+import Data.ByteString.Lazy.Char8 as Lazy ( pack, unpack )
 
 import Data.Serialize                     ( runPutLazy, runGetLazy )
 import Data.SafeCopy                      ( SafeCopy, safeGet, safePut )
@@ -129,7 +129,7 @@ runColdMethod core taggedMethod
 lookupColdMethod :: Core st -> Tagged Lazy.ByteString -> State st Lazy.ByteString
 lookupColdMethod core (storedMethodTag, methodContent)
     = case Map.lookup storedMethodTag (coreMethods core) of
-        Nothing      -> error $ "Method tag doesn't exist: " ++ show storedMethodTag
+        Nothing      -> missingMethod storedMethodTag
         Just (Method method)
           -> liftM (runPutLazy . safePut) (method (lazyDecode methodContent))
 
@@ -139,6 +139,11 @@ lazyDecode inp
         Left msg  -> error msg
         Right val -> val
 
+missingMethod :: Tag -> a
+missingMethod tag
+    = error msg
+    where msg = "This method is required but not available: " ++ show (Lazy.unpack tag) ++
+                ". Did you perhaps remove it before creating a checkpoint?"
 
 -- | Apply an in-memory method to the state.
 runHotMethod :: Method method => Core (MethodState method) -> method -> IO (MethodResult method)
@@ -151,7 +156,7 @@ runHotMethod core method
 lookupHotMethod :: Method method => Core (MethodState method) -> method -> State (MethodState method) (MethodResult method)
 lookupHotMethod core method
     = case Map.lookup (methodTag method) (coreMethods core) of
-        Nothing -> error $ "Method type doesn't exist: " ++ show (typeOf method)
+        Nothing -> missingMethod (methodTag method)
         Just (Method methodHandler)
           -> -- If the methodTag doesn't index the right methodHandler then we're in deep
              -- trouble. Luckly, it would take deliberate malevolence for that to happen.
