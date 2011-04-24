@@ -1,3 +1,4 @@
+{-# LANGUAGE ForeignFunctionInterface #-}
 -- A log is a stack of entries that supports efficient pushing of
 -- new entries and fetching of old. It can be considered an
 -- extendible array of entries.
@@ -19,10 +20,16 @@ import Data.Acid.Archive as Archive
 import System.Directory
 import System.FilePath
 import System.IO
+import System.Posix                              ( handleToFd, Fd(..), fdWriteBuf
+                                                 , closeFd )
+import Foreign.C
+import Foreign.Ptr
 import Control.Monad
 import Control.Concurrent
 import Control.Concurrent.STM
 import qualified Data.ByteString.Lazy as Lazy
+import qualified Data.ByteString as Strict
+import qualified Data.ByteString.Unsafe as Strict
 import Data.List
 import Data.Maybe
 import qualified Data.Serialize.Get as Get
@@ -38,7 +45,7 @@ type EntryId = Int
 
 data FileLog object
     = FileLog { logIdentifier  :: LogKey object
-              , logCurrent     :: MVar Handle
+              , logCurrent     :: MVar Fd -- Handle
               , logNextEntryId :: TVar EntryId
               , logQueue       :: TVar ([Lazy.ByteString], [IO ()])
               , logThreads     :: [ThreadId]
@@ -86,16 +93,20 @@ openFileLog identifier
          if null logFiles
             then do let currentEntryId = 0
                     currentHandle <- openBinaryFile (logDirectory identifier </> formatLogFile (logPrefix identifier) currentEntryId) WriteMode
-                    putMVar currentState currentHandle
+                    fd <- handleToFd currentHandle
+                    putMVar currentState fd
             else do let (lastFileEntryId, lastFilePath) = maximum logFiles
                     entries <- readEntities lastFilePath
                     let currentEntryId = lastFileEntryId + length entries
                     atomically $ writeTVar nextEntryRef currentEntryId
-                    currentHandle <- openFile (logDirectory identifier </> formatLogFile (logPrefix identifier) currentEntryId) WriteMode
-                    putMVar currentState currentHandle
+                    currentHandle <- openBinaryFile (logDirectory identifier </> formatLogFile (logPrefix identifier) currentEntryId) WriteMode
+                    fd <- handleToFd currentHandle
+                    putMVar currentState fd
          return fLog
 
-fileWriter :: MVar Handle -> TVar ([Lazy.ByteString], [IO ()]) -> IO ()
+foreign import ccall "fsync" c_fsync :: CInt -> IO CInt
+
+fileWriter :: MVar Fd -> TVar ([Lazy.ByteString], [IO ()]) -> IO ()
 fileWriter currentState queue
     = forever $
       do (entries, actions) <- atomically $ do (entries, actions) <- readTVar queue
@@ -104,19 +115,38 @@ fileWriter currentState queue
                                                -- We don't actually have to reverse the actions
                                                -- but I don't think it hurts performance much.
                                                return (reverse entries, reverse actions)
-         withMVar currentState $ \handle ->
+         withMVar currentState $ \fd ->
            do let arch = Archive.packEntries entries
-              Lazy.hPutStr handle arch
-              hFlush handle
-              return ()
+              writeToDisk fd (repack arch)
          sequence_ actions
          yield
+
+-- Repack a lazy bytestring into larger blocks that can be efficiently written to disk.
+repack :: Lazy.ByteString -> [Strict.ByteString]
+repack = worker
+    where worker bs
+              | Lazy.null bs = []
+              | otherwise    = Strict.concat (Lazy.toChunks (Lazy.take blockSize bs)) : worker (Lazy.drop blockSize bs)
+          blockSize = 4*1024
+
+writeToDisk :: Fd -> [Strict.ByteString] -> IO ()
+writeToDisk _ [] = return ()
+writeToDisk fd@(Fd c_fd) xs
+    = do mapM_ worker xs
+         c_fsync c_fd
+         return ()
+    where worker bs
+              = do let len = Strict.length bs
+                   count <- Strict.unsafeUseAsCString bs $ \ptr -> fdWriteBuf fd (castPtr ptr) (fromIntegral len)
+                   if fromIntegral count < len
+                      then worker (Strict.drop (fromIntegral count) bs)
+                      else return ()
 
 
 closeFileLog :: FileLog object -> IO ()
 closeFileLog fLog
-    = modifyMVar_ (logCurrent fLog) $ \handle ->
-      do hClose handle
+    = modifyMVar_ (logCurrent fLog) $ \fd ->
+      do closeFd fd
          _ <- forkIO $ forM_ (logThreads fLog) killThread
          return $ error "FileLog has been closed"
 
@@ -176,8 +206,8 @@ cutFileLog fLog
                                               next <- readTVar (logNextEntryId fLog)
                                               return (next - length entries)
                          modifyMVar_ (logCurrent fLog) $ \old ->
-                           do hClose old
-                              openFile (logDirectory key </> formatLogFile (logPrefix key) currentEntryId) WriteMode
+                           do closeFd old
+                              handleToFd =<< openBinaryFile (logDirectory key </> formatLogFile (logPrefix key) currentEntryId) WriteMode
                          putMVar mvar currentEntryId
          pushAction fLog action
          takeMVar mvar
@@ -210,12 +240,12 @@ newestEntry identifier
 -- blocks the serialization of events so it should be swift.
 pushEntry :: SafeCopy object => FileLog object -> object -> IO () -> IO ()
 pushEntry fLog object finally
-    = atomically $
+    = encoded `seq` atomically $
       do tid <- readTVar (logNextEntryId fLog)
          writeTVar (logNextEntryId fLog) (tid+1)
          (entries, actions) <- readTVar (logQueue fLog)
          writeTVar (logQueue fLog) ( encoded : entries, finally : actions )
-    where encoded = Put.runPutLazy (safePut object)
+    where encoded = Lazy.fromChunks [ Strict.copy $ Put.runPut (safePut object) ]
 
 -- The given IO action is executed once all previous entries are durable.
 pushAction :: FileLog object -> IO () -> IO ()

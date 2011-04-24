@@ -55,7 +55,7 @@ Library
   
   -- Packages needed in order to build this package.
   Build-depends:       base >= 4 && < 5, cereal >= 0.3.2.0, safecopy >= 0.5, bytestring, stm,
-                       filepath, directory, mtl, array, containers, template-haskell
+                       filepath, directory, mtl, array, containers, template-haskell, unix
 
   Hs-Source-Dirs:      src/
 
