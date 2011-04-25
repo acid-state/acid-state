@@ -43,15 +43,15 @@ $(makeAcidic ''MyState ['failEvent, 'errorEvent, 'stateError, 'tick])
 -- This is how AcidState is used:
 
 main :: IO ()
-main = do acid <- openAcidState (MyState 0)
+main = do acid <- openAcidStateFrom "state/Exceptions" (MyState 0)
           args <- getArgs
           case args of
             ["1"] -> update acid (undefined :: FailEvent)
             ["2"] -> update acid FailEvent
             ["3"] -> update acid ErrorEvent
-            ["4"] -> update acid ErrorEvent `catch` \e ->
-                     putStrLn $ "Caught exception: " ++ show (e::SomeException)
-            ["5"] -> update acid StateError
-            _     -> do putStrLn "Call with '1', '2', '3', '4' or '5' to test error scenarios."
+            ["4"] -> update acid StateError
+            _     -> do putStrLn "Call with '1', '2', '3' or '4' to test error scenarios."
                         n <- update acid Tick
                         putStrLn $ "Tick: " ++ show n
+           `catch` \e -> do putStrLn $ "Caught exception: " ++ show (e:: SomeException)
+                            createCheckpointAndClose acid
