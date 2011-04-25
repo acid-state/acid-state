@@ -1,5 +1,5 @@
 {-# LANGUAGE GADTs, OverloadedStrings, DeriveDataTypeable, TypeFamilies,
-             MagicHash, GeneralizedNewtypeDeriving #-}
+             GeneralizedNewtypeDeriving, BangPatterns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Data.Acid.Local
@@ -117,7 +117,7 @@ update :: UpdateEvent event => AcidState (EventState event) -> event -> IO (Even
 update acidState event
     = do mvar <- newEmptyMVar
          modifyCoreState_ (localCore acidState) $ \st ->
-           do let (result, st') = runState hotMethod st
+           do let !(result, !st') = runState hotMethod st
               -- Schedule the log entry. Very important that it happens when 'localCore' is locked
               -- to ensure that events are logged in the same order that they are executed.
               pushEntry (localEvents acidState) (methodTag event, runPutLazy (safePut event)) $ putMVar mvar result
