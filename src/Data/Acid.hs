@@ -19,6 +19,7 @@ module Data.Acid
     , openAcidStateFrom
     , closeAcidState
     , createCheckpoint
+    , createCheckpointAndClose
     , update
     , query
     , update'
