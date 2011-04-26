@@ -29,6 +29,7 @@ module Data.Acid.Local
     , createCheckpoint
     , createCheckpointAndClose
     , update
+    , scheduleUpdate
     , query
     , update'
     , query'
@@ -37,12 +38,15 @@ module Data.Acid.Local
 import Data.Acid.Log as Log
 import Data.Acid.Core
 
-import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar )
+import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar )
+--import Control.Exception              ( evaluate )
 import Control.Monad.State            ( MonadState, State, get, runState )
 import Control.Monad.Reader           ( Reader, runReader, MonadReader )
 import Control.Monad.Trans            ( MonadIO(liftIO) )
 import Control.Applicative            ( (<$>), (<*>) )
 import Data.ByteString.Lazy           ( ByteString )
+--import qualified Data.ByteString.Lazy as Lazy ( length )
+
 
 import Data.Serialize                 ( runPutLazy, runGetLazy )
 import Data.SafeCopy                  ( SafeCopy(..), safeGet, safePut
@@ -115,14 +119,31 @@ newtype Query st a  = Query { unQuery :: Reader st a }
 --   It's a run-time error to issue events that aren't supported by the AcidState.
 update :: UpdateEvent event => AcidState (EventState event) -> event -> IO (EventResult event)
 update acidState event
+    = takeMVar =<< scheduleUpdate acidState event
+
+-- | Issue an Update event and return immediately. The event is not durable
+--   before the MVar has been filled but the order of events is honored.
+--   The behavior in case of exceptions is exactly the same as for 'update'.
+--
+--   If EventA is scheduled before EventB, EventA /will/ be executed before EventB:
+--
+--   @
+--do scheduleUpdate acid EventA
+--   scheduleUpdate acid EventB
+--   @
+scheduleUpdate :: UpdateEvent event => AcidState (EventState event) -> event -> IO (MVar (EventResult event))
+scheduleUpdate acidState event
     = do mvar <- newEmptyMVar
+         let encoded = runPutLazy (safePut event)
+         --evaluate (Lazy.length encoded) -- It would be best to encode the event before we lock the core
+                                          -- but it hurts performance /-:
          modifyCoreState_ (localCore acidState) $ \st ->
            do let !(result, !st') = runState hotMethod st
               -- Schedule the log entry. Very important that it happens when 'localCore' is locked
               -- to ensure that events are logged in the same order that they are executed.
-              pushEntry (localEvents acidState) (methodTag event, runPutLazy (safePut event)) $ putMVar mvar result
+              pushEntry (localEvents acidState) (methodTag event, encoded) $ putMVar mvar result
               return st'
-         takeMVar mvar
+         return mvar
     where hotMethod = lookupHotMethod (localCore acidState) event
 
 -- | Same as 'update' but lifted into any monad capable of doing IO.
@@ -160,7 +181,8 @@ createCheckpoint acidState
          withCoreState (localCore acidState) $ \st ->
            do eventId <- askCurrentEntryId (localEvents acidState)
               pushAction (localEvents acidState) $
-                pushEntry (localCheckpoints acidState) (Checkpoint eventId (runPutLazy (safePut st))) (putMVar mvar ())
+                do let encoded = runPutLazy (safePut st)
+                   pushEntry (localCheckpoints acidState) (Checkpoint eventId encoded) (putMVar mvar ())
          takeMVar mvar
 
 -- | Save a snapshot to disk and close the AcidState as a single atomic
