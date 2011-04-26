@@ -2,6 +2,7 @@
 module Main (main) where
 
 import Data.Acid
+import Data.Acid.Local
 
 import Control.Monad.State
 import Control.Monad.Reader
@@ -15,7 +16,7 @@ import Data.Typeable
 -- The Haskell structure that we want to encapsulate
 
 data StressState = StressState !Int
-    deriving (Show, Typeable)
+    deriving (Typeable)
 
 $(deriveSafeCopy 0 'base ''StressState)
 
@@ -36,21 +37,23 @@ $(makeAcidic ''StressState ['pokeState, 'queryState])
 -- This is how AcidState is used:
 
 main :: IO ()
-main = do acid <- openAcidState (StressState 0)
-          args <- getArgs
+main = do args <- getArgs
           case args of
             ["checkpoint"]
-              -> createCheckpoint acid
+              -> do acid <- openAcidState (StressState 0)
+                    createCheckpoint acid
             ["query"]
-              -> do n <- query acid QueryState
+              -> do acid <- openAcidState (StressState 0)
+                    n <- query acid QueryState
                     putStrLn $ "State value: " ++ show n
             ["poke"]
-              -> do putStr "Issuing 10k sequential transactions... "
+              -> do acid <- openAcidState (StressState 0)
+                    putStr "Issuing 100k transactions... "
                     hFlush stdout
-                    replicateM_ 10000 (update acid PokeState)
+                    replicateM_ (100000-1) (scheduleUpdate acid PokeState)
+                    update acid PokeState
                     putStrLn "Done"
             _ -> do putStrLn $ "Commands:"
                     putStrLn $ "  query            Prints out the current state."
-                    putStrLn $ "  poke             Spawn 10k transactions."
+                    putStrLn $ "  poke             Spawn 100k transactions."
                     putStrLn $ "  checkpoint       Create a new checkpoint."
-          closeAcidState acid

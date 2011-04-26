@@ -37,7 +37,7 @@ Build-type:          Simple
 
 -- Extra files to be distributed with the package, such as examples or
 -- a README.
-Extra-source-files:  examples/*.hs
+Extra-source-files:  examples/*.hs, examples/errors/*.hs
 
 -- Constraint on the version of Cabal needed to build this package.
 Cabal-version:       >=1.6

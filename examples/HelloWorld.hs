@@ -1,10 +1,9 @@
 {-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
 module Main (main) where
 
-import Data.Acid.Core
 import Data.Acid
 
-import qualified Control.Monad.State as State
+import Control.Monad.State
 import Control.Monad.Reader
 import System.Environment
 import Data.SafeCopy
@@ -24,7 +23,7 @@ $(deriveSafeCopy 0 'base ''HelloWorldState)
 
 writeState :: String -> Update HelloWorldState ()
 writeState newValue
-    = State.put (HelloWorldState newValue)
+    = put (HelloWorldState newValue)
 
 queryState :: Query HelloWorldState String
 queryState = do HelloWorldState string <- ask
