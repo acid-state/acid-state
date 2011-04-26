@@ -240,7 +240,7 @@ newestEntry identifier
 -- blocks the serialization of events so it should be swift.
 pushEntry :: SafeCopy object => FileLog object -> object -> IO () -> IO ()
 pushEntry fLog object finally
-    = encoded `seq` atomically $
+    = atomically $
       do tid <- readTVar (logNextEntryId fLog)
          writeTVar (logNextEntryId fLog) (tid+1)
          (entries, actions) <- readTVar (logQueue fLog)
