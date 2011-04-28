@@ -91,8 +91,7 @@ eventsToMethods = map worker
     [@Atomicity@]  State changes are all-or-nothing. This is what you'd expect of any state
                    variable in Haskell and AcidState doesn't change that.
 
-    [@Consistency@] No event or set of events will break your data invariants. This includes
-                    power outages, 
+    [@Consistency@] No event or set of events will break your data invariants.
 
     [@Isolation@] Transactions cannot interfere with each other even when issued in parallel.
 
