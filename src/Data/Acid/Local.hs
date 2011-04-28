@@ -33,6 +33,7 @@ module Data.Acid.Local
     , query
     , update'
     , query'
+    , runQuery
     ) where
 
 import Data.Acid.Log as Log
@@ -111,6 +112,12 @@ newtype Update st a = Update { unUpdate :: State st a }
 -- | Context monad for Query events.
 newtype Query st a  = Query { unQuery :: Reader st a }
     deriving (Monad, MonadReader st)
+
+-- | Run a query in the Update Monad.
+runQuery :: Query st a -> Update st a
+runQuery query
+    = do st <- get
+         return (runReader (unQuery query) st)
 
 -- | Issue an Update event and wait for its result. Once this call returns, you are
 --   guaranteed that the changes to the state are durable. Events may be issued in

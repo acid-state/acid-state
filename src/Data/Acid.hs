@@ -32,6 +32,7 @@ module Data.Acid
     , Query
     , IsAcidic
     , makeAcidic
+    , runQuery
     ) where
 
 import Data.Acid.Local
