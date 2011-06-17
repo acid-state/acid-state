@@ -49,7 +49,9 @@ makeAcidic stateName eventNames
                    -> makeAcidic' eventNames stateName tyvars constructors
                  NewtypeD _cxt _name tyvars constructor _derivs
                    -> makeAcidic' eventNames stateName tyvars [constructor]
-                 _ -> error "Unsupported state type. Only 'data' and 'newtype' are supported."
+                 TySynD _name tyvars _ty
+                   -> makeAcidic' eventNames stateName tyvars []
+                 _ -> error "Unsupported state type. Only 'data', 'newtype' and 'type' are supported."
            _ -> error "Given state is not a type."
 
 makeEvent :: Name -> Q [Dec]
