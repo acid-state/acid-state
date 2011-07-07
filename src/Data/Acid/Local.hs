@@ -55,6 +55,8 @@ import Data.SafeCopy                  ( SafeCopy(..), safeGet, safePut
 import Data.Typeable                  ( Typeable, typeOf )
 import System.FilePath                ( (</>) )
 
+import Control.Applicative            (Applicative(..))
+
 -- | Events return the same thing as Methods. The exact type of 'EventResult'
 --   depends on the event.
 type EventResult ev = MethodResult ev
@@ -106,11 +108,11 @@ data AcidState st
 
 -- | Context monad for Update events.
 newtype Update st a = Update { unUpdate :: State st a }
-    deriving (Monad, MonadState st)
+    deriving (Monad, Functor, Applicative, MonadState st)
 
 -- | Context monad for Query events.
 newtype Query st a  = Query { unQuery :: Reader st a }
-    deriving (Monad, MonadReader st)
+    deriving (Monad, Functor, Applicative, MonadReader st)
 
 -- | Run a query in the Update Monad.
 runQuery :: Query st a -> Update st a
