@@ -1,5 +1,5 @@
 {-# LANGUAGE GADTs, OverloadedStrings, DeriveDataTypeable, TypeFamilies,
-             GeneralizedNewtypeDeriving, BangPatterns #-}
+             GeneralizedNewtypeDeriving, BangPatterns, CPP #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Data.Acid.Local
@@ -108,11 +108,19 @@ data AcidState st
 
 -- | Context monad for Update events.
 newtype Update st a = Update { unUpdate :: State st a }
+#if MIN_VERSION_mtl(2,0,0)
     deriving (Monad, Functor, Applicative, MonadState st)
+#else
+    deriving (Monad, Functor, MonadState st)
+#endif
 
 -- | Context monad for Query events.
 newtype Query st a  = Query { unQuery :: Reader st a }
+#if MIN_VERSION_mtl(2,0,0)
     deriving (Monad, Functor, Applicative, MonadReader st)
+#else
+    deriving (Monad, Functor, MonadReader st)
+#endif
 
 -- | Run a query in the Update Monad.
 runQuery :: Query st a -> Update st a
@@ -123,7 +131,7 @@ runQuery query
 -- | Issue an Update event and wait for its result. Once this call returns, you are
 --   guaranteed that the changes to the state are durable. Events may be issued in
 --   parallel.
---   
+--
 --   It's a run-time error to issue events that aren't supported by the AcidState.
 update :: UpdateEvent event => AcidState (EventState event) -> event -> IO (EventResult event)
 update acidState event
@@ -181,7 +189,7 @@ query' acidState event
 --   makes it faster to resume AcidStates and you're free to create them as
 --   often or seldom as fits your needs. Transactions can run concurrently
 --   with this call.
---   
+--
 --   This call will not return until the operation has succeeded.
 createCheckpoint :: SafeCopy st => AcidState st -> IO ()
 createCheckpoint acidState
@@ -223,7 +231,7 @@ class (SafeCopy st) => IsAcidic st where
       -- ^ List of events capable of updating or querying the state.
 
 -- | Create an AcidState given an initial value.
---   
+--
 --   This will create or resume a log found in the \"state\/[typeOf state]\/\" directory.
 openAcidState :: (Typeable st, IsAcidic st)
               => st                          -- ^ Initial state value. This value is only used if no checkpoint is
@@ -233,7 +241,7 @@ openAcidState initialState
     = openAcidStateFrom ("state" </> show (typeOf initialState)) initialState
 
 -- | Create an AcidState given a log directory and an initial value.
---   
+--
 --   This will create or resume a log found in @directory@.
 --   Running two AcidState's from the same directory is an error
 --   but will not result in dataloss.
@@ -257,7 +265,7 @@ openAcidStateFrom directory initialState
                                                                Left msg  -> checkpointRestoreError msg
                                                                Right val -> return val)
                         return eventCutOff
-         
+
          eventsLog <- openFileLog eventsLogKey
          events <- readEntriesFrom eventsLog n
          mapM_ (runColdMethod core) events
