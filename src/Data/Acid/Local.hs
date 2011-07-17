@@ -38,11 +38,11 @@ module Data.Acid.Local
 
 import Data.Acid.Log as Log
 import Data.Acid.Core
+import Data.Acid.Common
 
 import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar )
 --import Control.Exception              ( evaluate )
-import Control.Monad.State            ( MonadState, State, get, runState )
-import Control.Monad.Reader           ( Reader, runReader, MonadReader )
+import Control.Monad.State            ( runState )
 import Control.Monad.Trans            ( MonadIO(liftIO) )
 import Control.Applicative            ( (<$>), (<*>) )
 import Data.ByteString.Lazy           ( ByteString )
@@ -55,38 +55,7 @@ import Data.SafeCopy                  ( SafeCopy(..), safeGet, safePut
 import Data.Typeable                  ( Typeable, typeOf )
 import System.FilePath                ( (</>) )
 
-import Control.Applicative            (Applicative(..))
 
--- | Events return the same thing as Methods. The exact type of 'EventResult'
---   depends on the event.
-type EventResult ev = MethodResult ev
-
-type EventState ev = MethodState ev
-
--- | We distinguish between events that modify the state and those that do not.
---
---   UpdateEvents are executed in a MonadState context and have to be serialized
---   to disk before they are considered durable.
---
---   QueryEvents are executed in a MonadReader context and obviously do not have
---   to be serialized to disk.
-data Event st where
-    UpdateEvent :: UpdateEvent ev => (ev -> Update (EventState ev) (EventResult ev)) -> Event (EventState ev)
-    QueryEvent  :: QueryEvent  ev => (ev -> Query (EventState ev) (EventResult ev)) -> Event (EventState ev)
-
--- | All UpdateEvents are also Methods.
-class Method ev => UpdateEvent ev
--- | All QueryEvents are also Methods.
-class Method ev => QueryEvent ev
-
-
-eventsToMethods :: [Event st] -> [MethodContainer st]
-eventsToMethods = map worker
-    where worker :: Event st -> MethodContainer st
-          worker (UpdateEvent fn) = Method (unUpdate . fn)
-          worker (QueryEvent fn)  = Method (\ev -> do st <- get
-                                                      return (runReader (unQuery $ fn ev) st)
-                                           )
 {-| State container offering full ACID (Atomicity, Consistency, Isolation and Durability)
     guarantees.
 
@@ -106,27 +75,6 @@ data AcidState st
                 , localCheckpoints :: FileLog Checkpoint
                 }
 
--- | Context monad for Update events.
-newtype Update st a = Update { unUpdate :: State st a }
-#if MIN_VERSION_mtl(2,0,0)
-    deriving (Monad, Functor, Applicative, MonadState st)
-#else
-    deriving (Monad, Functor, MonadState st)
-#endif
-
--- | Context monad for Query events.
-newtype Query st a  = Query { unQuery :: Reader st a }
-#if MIN_VERSION_mtl(2,0,0)
-    deriving (Monad, Functor, Applicative, MonadReader st)
-#else
-    deriving (Monad, Functor, MonadReader st)
-#endif
-
--- | Run a query in the Update Monad.
-runQuery :: Query st a -> Update st a
-runQuery query
-    = do st <- get
-         return (runReader (unQuery query) st)
 
 -- | Issue an Update event and wait for its result. Once this call returns, you are
 --   guaranteed that the changes to the state are durable. Events may be issued in
@@ -226,9 +174,6 @@ instance SafeCopy Checkpoint where
              safePut content
     getCopy = contain $ Checkpoint <$> safeGet <*> safeGet
 
-class (SafeCopy st) => IsAcidic st where
-    acidEvents :: [Event st]
-      -- ^ List of events capable of updating or querying the state.
 
 -- | Create an AcidState given an initial value.
 --
