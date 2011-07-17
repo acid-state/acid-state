@@ -54,10 +54,15 @@ makeAcidic stateName eventNames
                  _ -> error "Unsupported state type. Only 'data', 'newtype' and 'type' are supported."
            _ -> error "Given state is not a type."
 
+makeAcidic' :: [Name] -> Name -> [TyVarBndr] -> [Con] -> Q [Dec]
+makeAcidic' eventNames stateName tyvars constructors
+    = do events <- sequence [ makeEvent eventName | eventName <- eventNames ]
+         acidic <- makeIsAcidic eventNames stateName tyvars constructors
+         return $ acidic : concat events
+
 makeEvent :: Name -> Q [Dec]
 makeEvent eventName
-    = do eventInfo <- reify eventName
-         eventType <- getEventType eventName
+    = do eventType <- getEventType eventName
          d <- makeEventDataType eventName eventType
          b <- makeSafeCopyInstance eventName eventType
          i <- makeMethodInstance eventName eventType
@@ -192,9 +197,3 @@ analyseType eventName t
               | con == ''Update = (state, result, True)
               | con == ''Query  = (state, result, False)
           findMonad _ = error $ "Event has an invalid type signature: Not an Update or a Query: " ++ show eventName
-
-makeAcidic' :: [Name] -> Name -> [TyVarBndr] -> [Con] -> Q [Dec]
-makeAcidic' eventNames stateName tyvars constructors
-    = do events <- sequence [ makeEvent eventName | eventName <- eventNames ]
-         acidic <- makeIsAcidic eventNames stateName tyvars constructors
-         return $ acidic : concat events
