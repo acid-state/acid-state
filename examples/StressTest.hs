@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
 module Main (main) where
 
-import Data.Acid
+import Data.Acid (makeAcidic)
 import Data.Acid.Local
 
 import Control.Monad.State
@@ -31,7 +31,10 @@ queryState :: Query StressState Int
 queryState = do StressState i <- ask
                 return i
 
-$(makeAcidic ''StressState ['pokeState, 'queryState])
+clearState :: Update StressState ()
+clearState = put $ StressState 0
+
+$(makeAcidic ''StressState ['pokeState, 'queryState, 'clearState])
 
 ------------------------------------------------------
 -- This is how AcidState is used:
@@ -53,6 +56,10 @@ main = do args <- getArgs
                     replicateM_ (100000-1) (scheduleUpdate acid PokeState)
                     update acid PokeState
                     putStrLn "Done"
+            ["clear"]
+              -> do acid <- openAcidState (StressState 0)
+                    update acid ClearState
+                    createCheckpoint acid
             _ -> do putStrLn $ "Commands:"
                     putStrLn $ "  query            Prints out the current state."
                     putStrLn $ "  poke             Spawn 100k transactions."
