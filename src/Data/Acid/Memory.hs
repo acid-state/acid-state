@@ -2,7 +2,7 @@
              GeneralizedNewtypeDeriving, BangPatterns, CPP #-}
 -----------------------------------------------------------------------------
 -- |
--- Module      :  Data.Acid.Main
+-- Module      :  Data.Acid.Memory
 -- Copyright   :  PublicDomain
 --
 -- Maintainer  :  lemmih@gmail.com
