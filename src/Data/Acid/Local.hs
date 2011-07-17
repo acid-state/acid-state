@@ -108,7 +108,7 @@ scheduleUpdate acidState event
               pushEntry (localEvents acidState) (methodTag event, encoded) $ putMVar mvar result
               return st'
          return mvar
-    where hotMethod = lookupHotMethod (localCore acidState) event
+    where hotMethod = lookupHotMethod (coreMethods (localCore acidState)) event
 
 -- | Same as 'update' but lifted into any monad capable of doing IO.
 update' :: (UpdateEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
@@ -126,7 +126,7 @@ query acidState event
               pushAction (localEvents acidState) $
                 putMVar mvar result
          takeMVar mvar
-    where hotMethod = lookupHotMethod (localCore acidState) event
+    where hotMethod = lookupHotMethod (coreMethods (localCore acidState)) event
 
 -- | Same as 'query' but lifted into any monad capable of doing IO.
 query' :: (QueryEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)

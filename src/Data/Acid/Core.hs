@@ -17,7 +17,7 @@
 -- \'Method\' is loosely used for state operations without ACID guarantees
 --
 module Data.Acid.Core
-    ( Core
+    ( Core(coreMethods)
     , Method(..)
     , MethodContainer(..)
     , Tagged
@@ -31,6 +31,8 @@ module Data.Acid.Core
     , lookupColdMethod
     , runHotMethod
     , runColdMethod
+    , MethodMap
+    , mkMethodMap
     ) where
 
 import Control.Concurrent                 ( MVar, newMVar, withMVar
@@ -149,13 +151,14 @@ missingMethod tag
 runHotMethod :: Method method => Core (MethodState method) -> method -> IO (MethodResult method)
 runHotMethod core method
     = modifyCoreState core $ \st ->
-      do let (a, st') = runState (lookupHotMethod core method) st
+      do let (a, st') = runState (lookupHotMethod (coreMethods core) method) st
          return ( st', a)
 
 -- | Find the state action that corresponds to an in-memory method.
-lookupHotMethod :: Method method => Core (MethodState method) -> method -> State (MethodState method) (MethodResult method)
-lookupHotMethod core method
-    = case Map.lookup (methodTag method) (coreMethods core) of
+lookupHotMethod :: Method method => MethodMap (MethodState method) -> method
+                -> State (MethodState method) (MethodResult method)
+lookupHotMethod methodMap method
+    = case Map.lookup (methodTag method) methodMap of
         Nothing -> missingMethod (methodTag method)
         Just (Method methodHandler)
           -> -- If the methodTag doesn't index the right methodHandler then we're in deep

@@ -46,7 +46,8 @@ Cabal-version:       >=1.6
 Library
   -- Modules exported by the library.
   Exposed-Modules:     Data.Acid, Data.Acid.Core,
-                       Data.Acid.Local, Data.Acid.Memory
+                       Data.Acid.Local, Data.Acid.Memory,
+                       Data.Acid.Memory.Pure
 
   -- Modules not exported by this package.
   Other-modules:       Data.Acid.Log, Data.Acid.Archive,
