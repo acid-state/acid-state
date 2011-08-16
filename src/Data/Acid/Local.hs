@@ -250,7 +250,7 @@ createArchive state
        let durableCheckpointId = currentCheckpointId-1
        checkpoints <- readEntriesFrom (localCheckpoints state) durableCheckpointId
        case checkpoints of
-         []      -> putStrLn "No checkpoint => no archive."
+         []      -> return ()
          (Checkpoint entryId _content : _)
            -> do -- 'entryId' is the lowest entryId that didn't contribute to the checkpoint.
                  -- 'archiveFileLog' moves all files that are lower than this entryId to the archive.
