@@ -14,6 +14,8 @@ module Data.Acid.Log
     , readEntriesFrom
     , newestEntry
     , askCurrentEntryId
+    , getNextDurableEntryId
+    , archiveFileLog
     ) where
 
 import Data.Acid.Archive as Archive
@@ -170,21 +172,7 @@ readEntriesFrom fLog youngestEntry
          -- We're interested in these entries: youngestEntry <= x < entryCap.
          logFiles <- findLogFiles (logIdentifier fLog)
          let sorted = sort logFiles
-             findRelevant [] = []
-             findRelevant [ logFile ]
-                 | youngestEntry <= rangeStart logFile && rangeStart logFile < entryCap
-                 = [ logFile ]
-                 | otherwise
-                 = []
-             findRelevant ( left : right : xs )
-                 | youngestEntry >= rangeStart right -- All entries in 'path' must be too old if this is true
-                 = findRelevant (right : xs)
-                 | rangeStart left >= entryCap -- All files from now on contain entries that are too young.
-                 = []
-                 | otherwise
-                 = left : findRelevant (right : xs)
-
-             relevant = findRelevant sorted
+             relevant = filterLogFiles (Just youngestEntry) (Just entryCap) sorted
              firstEntryId = case relevant of
                               []                     -> 0
                               ( logFile : _logFiles) -> rangeStart logFile
@@ -197,14 +185,56 @@ readEntriesFrom fLog youngestEntry
 
     where rangeStart (firstEntryId, _path) = firstEntryId
 
+-- Filter out log files that are outside the min_entry/max_entry range.
+-- minEntryId <= x < maxEntryId
+filterLogFiles :: Maybe EntryId -> Maybe EntryId -> [(EntryId, FilePath)] -> [(EntryId, FilePath)]
+filterLogFiles minEntryIdMb maxEntryIdMb logFiles
+  = worker logFiles
+  where worker [] = []
+        worker [ logFile ]
+          | ltMaxEntryId (rangeStart logFile) -- If the logfile starts before our maxEntryId then we're intersted.
+          = [ logFile ]
+          | otherwise
+          = []
+        worker ( left : right : xs)
+          | ltMinEntryId (rangeStart right) -- If 'right' starts before our minEntryId then we can discard 'left'.
+          = worker (right : xs)
+          | ltMaxEntryId (rangeStart left)  -- If 'left' starts before our maxEntryId then we're interested.
+          = left : worker (right : xs)
+          | otherwise                       -- If 'left' starts after our maxEntryId then we're done.
+          = []
+        ltMinEntryId = case minEntryIdMb of Nothing         -> const False
+                                            Just minEntryId -> \entryId -> entryId < minEntryId
+        ltMaxEntryId = case maxEntryIdMb of Nothing         -> const True
+                                            Just maxEntryId -> \entryId -> entryId < maxEntryId
+        rangeStart (firstEntryId, _path) = firstEntryId
+
+-- Move all log files that do not contain entries equal or higher than the given entryId
+-- into an Archive/ directory.
+archiveFileLog :: FileLog object -> EntryId -> IO ()
+archiveFileLog fLog entryId
+  = do logFiles <- findLogFiles (logIdentifier fLog)
+       print entryId
+       let sorted = sort logFiles
+           relevant = filterLogFiles Nothing (Just entryId) sorted \\
+                      filterLogFiles (Just (entryId+1)) (Just entryId) sorted
+
+       createDirectoryIfMissing True archiveDir
+       forM_ relevant $ \(_startEntry, logFilePath) ->
+         renameFile logFilePath (archiveDir </> takeFileName logFilePath)
+  where archiveDir = logDirectory (logIdentifier fLog) </> "Archive"
+
+getNextDurableEntryId :: FileLog object -> IO EntryId
+getNextDurableEntryId fLog
+  = atomically $
+    do (entries, _) <- readTVar (logQueue fLog)
+       next <- readTVar (logNextEntryId fLog)
+       return (next - length entries)
 
 cutFileLog :: FileLog object -> IO EntryId
 cutFileLog fLog
     = do mvar <- newEmptyMVar
-         let action = do currentEntryId <- atomically $
-                                           do (entries, _) <- readTVar (logQueue fLog)
-                                              next <- readTVar (logNextEntryId fLog)
-                                              return (next - length entries)
+         let action = do currentEntryId <- getNextDurableEntryId fLog
                          modifyMVar_ (logCurrent fLog) $ \old ->
                            do closeFd old
                               handleToFd =<< openBinaryFile (logDirectory key </> formatLogFile (logPrefix key) currentEntryId) WriteMode

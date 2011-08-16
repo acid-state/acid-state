@@ -28,6 +28,7 @@ module Data.Acid.Local
     , closeAcidState
     , createCheckpoint
     , createCheckpointAndClose
+    , createArchive
     , update
     , scheduleUpdate
     , query
@@ -231,3 +232,29 @@ closeAcidState acidState
          closeFileLog (localEvents acidState)
          closeFileLog (localCheckpoints acidState)
 
+
+-- | Move all log files that are no longer necessary for state restoration into the 'Archive'
+--   folder in the state directory. This folder can then be backed up or thrown out as you see fit.
+--   Reverting to a state before the last checkpoint will not be possible if the 'Archive' folder
+--   has been thrown out.
+-- 
+--   This method is idempotent and does not block the normal operation of the AcidState.
+createArchive :: AcidState st -> IO ()
+createArchive state
+  = do -- We need to look at the last checkpoint saved to disk. Since checkpoints can be written
+       -- in parallel with this call, we can't guarantee that the checkpoint we get really is the
+       -- last one but that's alright.
+       currentCheckpointId <- getNextDurableEntryId (localCheckpoints state)
+       -- 'currentCheckpointId' is the ID of the next checkpoint that will be written to disk.
+       -- 'currentCheckpointId-1' must then be the ID of a checkpoint on disk (or -1, of course).
+       let durableCheckpointId = currentCheckpointId-1
+       checkpoints <- readEntriesFrom (localCheckpoints state) durableCheckpointId
+       case checkpoints of
+         []      -> putStrLn "No checkpoint => no archive."
+         (Checkpoint entryId _content : _)
+           -> do -- 'entryId' is the lowest entryId that didn't contribute to the checkpoint.
+                 -- 'archiveFileLog' moves all files that are lower than this entryId to the archive.
+                 archiveFileLog (localEvents state) entryId
+                 -- In the same style as above, we archive all log files that came before the log file
+                 -- which contains our checkpoint.
+                 archiveFileLog (localCheckpoints state) durableCheckpointId
