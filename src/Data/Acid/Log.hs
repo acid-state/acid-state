@@ -214,7 +214,6 @@ filterLogFiles minEntryIdMb maxEntryIdMb logFiles
 archiveFileLog :: FileLog object -> EntryId -> IO ()
 archiveFileLog fLog entryId
   = do logFiles <- findLogFiles (logIdentifier fLog)
-       print entryId
        let sorted = sort logFiles
            relevant = filterLogFiles Nothing (Just entryId) sorted \\
                       filterLogFiles (Just (entryId+1)) (Just entryId) sorted
