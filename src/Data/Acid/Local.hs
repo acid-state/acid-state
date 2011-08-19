@@ -244,7 +244,7 @@ createArchive state
   = do -- We need to look at the last checkpoint saved to disk. Since checkpoints can be written
        -- in parallel with this call, we can't guarantee that the checkpoint we get really is the
        -- last one but that's alright.
-       currentCheckpointId <- getNextDurableEntryId (localCheckpoints state)
+       currentCheckpointId <- cutFileLog (localCheckpoints state)
        -- 'currentCheckpointId' is the ID of the next checkpoint that will be written to disk.
        -- 'currentCheckpointId-1' must then be the ID of a checkpoint on disk (or -1, of course).
        let durableCheckpointId = currentCheckpointId-1

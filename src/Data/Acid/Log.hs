@@ -14,7 +14,7 @@ module Data.Acid.Log
     , readEntriesFrom
     , newestEntry
     , askCurrentEntryId
-    , getNextDurableEntryId
+    , cutFileLog
     , archiveFileLog
     ) where
 
