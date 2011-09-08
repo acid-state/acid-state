@@ -159,7 +159,7 @@ readEntities path
     where worker Done = []
           worker (Next entry next)
               = entry : worker next
-          worker Fail{} = []
+          worker (Fail msg) = error msg
 
 -- Read all durable entries younger than the given EntryId.
 -- Note that entries written during or after this call won't
@@ -259,9 +259,9 @@ newestEntry identifier
               = case Archive.readEntries archive of
                   Done            -> worker archives
                   Next entry next -> Just (decode' (lastEntry entry next))
-                  Fail{}          -> worker archives
+                  Fail msg        -> error msg
           lastEntry entry Done   = entry
-          lastEntry entry Fail{} = entry
+          lastEntry entry (Fail msg) = error msg
           lastEntry _ (Next entry next) = lastEntry entry next
 
 -- Schedule a new log entry. This call does not block

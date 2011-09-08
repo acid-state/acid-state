@@ -29,7 +29,7 @@ data Entries = Done | Next Entry Entries | Fail String
 entriesToList :: Entries -> [Entry]
 entriesToList Done              = []
 entriesToList (Next entry next) = entry : entriesToList next
-entriesToList (Fail msg)        = fail msg
+entriesToList (Fail msg)        = error msg
 
 entriesToListNoFail :: Entries -> [Entry]
 entriesToListNoFail Done              = []
