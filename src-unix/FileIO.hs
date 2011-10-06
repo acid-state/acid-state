@@ -8,7 +8,6 @@ import System.Posix(Fd(Fd),
                     defaultFileFlags,
                     stdFileMode
                    )
-import System.IO(IOMode(..))
 import Data.Word(Word8,Word32)
 import Foreign(Ptr)
 import Foreign.C(CInt)
