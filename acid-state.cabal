@@ -52,13 +52,24 @@ Library
   -- Modules not exported by this package.
   Other-modules:       Data.Acid.Log, Data.Acid.Archive,
                        Data.Acid.CRC, Paths_acid_state,
-                       Data.Acid.TemplateHaskell, Data.Acid.Common
+                       Data.Acid.TemplateHaskell, Data.Acid.Common, FileIO
   
   -- Packages needed in order to build this package.
   Build-depends:       base >= 4 && < 5, cereal >= 0.3.2.0, safecopy >= 0.5, bytestring, stm,
-                       filepath, directory, mtl, array, containers, template-haskell, unix
+                       filepath, directory, mtl, array, containers, template-haskell
+
+  if os(windows)
+     Build-depends:       Win32
+  else
+     Build-depends:       unix
 
   Hs-Source-Dirs:      src/
+
+  if os(windows)
+     Hs-Source-Dirs:   src-win32/
+  else
+     Hs-Source-Dirs:   src-unix/
+
 
   GHC-Options:         -fwarn-unused-imports -fwarn-unused-binds
 

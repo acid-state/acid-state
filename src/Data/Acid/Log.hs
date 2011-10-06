@@ -21,10 +21,8 @@ module Data.Acid.Log
 import Data.Acid.Archive as Archive
 import System.Directory
 import System.FilePath
-import System.IO
-import System.Posix                              ( handleToFd, Fd(..), fdWriteBuf
-                                                 , closeFd )
-import Foreign.C
+import FileIO
+
 import Foreign.Ptr
 import Control.Monad
 import Control.Concurrent
@@ -47,7 +45,7 @@ type EntryId = Int
 
 data FileLog object
     = FileLog { logIdentifier  :: LogKey object
-              , logCurrent     :: MVar Fd -- Handle
+              , logCurrent     :: MVar FHandle -- Handle
               , logNextEntryId :: TVar EntryId
               , logQueue       :: TVar ([Lazy.ByteString], [IO ()])
               , logThreads     :: [ThreadId]
@@ -94,21 +92,17 @@ openFileLog identifier
                             , logThreads     = [tid2] }
          if null logFiles
             then do let currentEntryId = 0
-                    currentHandle <- openBinaryFile (logDirectory identifier </> formatLogFile (logPrefix identifier) currentEntryId) WriteMode
-                    fd <- handleToFd currentHandle
-                    putMVar currentState fd
+                    handle <- open (logDirectory identifier </> formatLogFile (logPrefix identifier) currentEntryId)
+                    putMVar currentState handle
             else do let (lastFileEntryId, lastFilePath) = maximum logFiles
                     entries <- readEntities lastFilePath
                     let currentEntryId = lastFileEntryId + length entries
                     atomically $ writeTVar nextEntryRef currentEntryId
-                    currentHandle <- openBinaryFile (logDirectory identifier </> formatLogFile (logPrefix identifier) currentEntryId) WriteMode
-                    fd <- handleToFd currentHandle
-                    putMVar currentState fd
+                    handle <- open (logDirectory identifier </> formatLogFile (logPrefix identifier) currentEntryId)
+                    putMVar currentState handle
          return fLog
 
-foreign import ccall "fsync" c_fsync :: CInt -> IO CInt
-
-fileWriter :: MVar Fd -> TVar ([Lazy.ByteString], [IO ()]) -> IO ()
+fileWriter :: MVar FHandle -> TVar ([Lazy.ByteString], [IO ()]) -> IO ()
 fileWriter currentState queue
     = forever $
       do (entries, actions) <- atomically $ do (entries, actions) <- readTVar queue
@@ -131,15 +125,15 @@ repack = worker
               | otherwise    = Strict.concat (Lazy.toChunks (Lazy.take blockSize bs)) : worker (Lazy.drop blockSize bs)
           blockSize = 4*1024
 
-writeToDisk :: Fd -> [Strict.ByteString] -> IO ()
+writeToDisk :: FHandle -> [Strict.ByteString] -> IO ()
 writeToDisk _ [] = return ()
-writeToDisk fd@(Fd c_fd) xs
+writeToDisk handle xs
     = do mapM_ worker xs
-         c_fsync c_fd
+         flush handle
          return ()
     where worker bs
               = do let len = Strict.length bs
-                   count <- Strict.unsafeUseAsCString bs $ \ptr -> fdWriteBuf fd (castPtr ptr) (fromIntegral len)
+                   count <- Strict.unsafeUseAsCString bs $ \ptr -> write handle (castPtr ptr) (fromIntegral len)
                    if fromIntegral count < len
                       then worker (Strict.drop (fromIntegral count) bs)
                       else return ()
@@ -147,8 +141,8 @@ writeToDisk fd@(Fd c_fd) xs
 
 closeFileLog :: FileLog object -> IO ()
 closeFileLog fLog
-    = modifyMVar_ (logCurrent fLog) $ \fd ->
-      do closeFd fd
+    = modifyMVar_ (logCurrent fLog) $ \handle ->
+      do close handle
          _ <- forkIO $ forM_ (logThreads fLog) killThread
          return $ error "FileLog has been closed"
 
@@ -235,8 +229,8 @@ cutFileLog fLog
     = do mvar <- newEmptyMVar
          let action = do currentEntryId <- getNextDurableEntryId fLog
                          modifyMVar_ (logCurrent fLog) $ \old ->
-                           do closeFd old
-                              handleToFd =<< openBinaryFile (logDirectory key </> formatLogFile (logPrefix key) currentEntryId) WriteMode
+                           do close old
+                              open (logDirectory key </> formatLogFile (logPrefix key) currentEntryId)
                          putMVar mvar currentEntryId
          pushAction fLog action
          takeMVar mvar
