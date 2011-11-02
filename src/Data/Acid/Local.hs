@@ -31,7 +31,9 @@ module Data.Acid.Local
     , createArchive
     , update
     , scheduleUpdate
+    , scheduleColdUpdate
     , query
+    , queryCold
     , update'
     , query'
     , runQuery
@@ -111,6 +113,18 @@ scheduleUpdate acidState event
          return mvar
     where hotMethod = lookupHotMethod (coreMethods (localCore acidState)) event
 
+scheduleColdUpdate :: AcidState st -> Tagged ByteString -> IO (MVar ByteString)
+scheduleColdUpdate acidState event
+    = do mvar <- newEmptyMVar
+         modifyCoreState_ (localCore acidState) $ \st ->
+           do let !(result, !st') = runState coldMethod st
+              -- Schedule the log entry. Very important that it happens when 'localCore' is locked
+              -- to ensure that events are logged in the same order that they are executed.
+              pushEntry (localEvents acidState) event $ putMVar mvar result
+              return st'
+         return mvar
+    where coldMethod = lookupColdMethod (localCore acidState) event
+
 -- | Same as 'update' but lifted into any monad capable of doing IO.
 update' :: (UpdateEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
 update' acidState event
@@ -128,6 +142,18 @@ query acidState event
                 putMVar mvar result
          takeMVar mvar
     where hotMethod = lookupHotMethod (coreMethods (localCore acidState)) event
+
+queryCold  :: AcidState st -> Tagged ByteString -> IO ByteString
+queryCold acidState event
+    = do mvar <- newEmptyMVar
+         withCoreState (localCore acidState) $ \st ->
+           do let (result, _st) = runState coldMethod st
+              -- Make sure that we do not return the result before the event log has
+              -- been flushed to disk.
+              pushAction (localEvents acidState) $
+                putMVar mvar result
+         takeMVar mvar
+    where coldMethod = lookupColdMethod (localCore acidState) event
 
 -- | Same as 'query' but lifted into any monad capable of doing IO.
 query' :: (QueryEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
