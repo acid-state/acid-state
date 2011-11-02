@@ -64,9 +64,11 @@ data Response = Result Lazy.ByteString | Acknowledgement
 instance Serialize Response where
   put resp = case resp of
                Result result -> do putWord8 0; put result
+               Acknowledgement -> putWord8 1
   get = do tag <- getWord8
            case tag of
              0 -> liftM Result get
+             1 -> return Acknowledgement
 
 process :: SafeCopy st => Local.AcidState st -> Handle -> IO ()
 process acidState handle
