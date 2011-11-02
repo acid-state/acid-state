@@ -30,13 +30,15 @@ import Data.Acid.Common
 import Network
 import qualified Data.ByteString as Strict
 import qualified Data.ByteString.Lazy as Lazy
+import Control.Exception (throwIO, ErrorCall(..))
 import Control.Monad
 import Control.Monad.Trans (MonadIO(liftIO))
 import Control.Concurrent
+import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Serialize
 import Data.SafeCopy
 import System.IO
-import qualified Data.Map as Map
+import qualified Data.Sequence as Seq
 
 acidServer :: SafeCopy st => Local.AcidState st -> PortID -> IO ()
 acidServer acidState port
@@ -79,16 +81,16 @@ process acidState handle
               Partial cont  -> do inp <- Strict.hGetSome handle 1024
                                   worker (cont inp)
               Done cmd rest -> do processCommand cmd; worker (runGetPartial get rest)
-        processCommand (token, cmd) =
+        processCommand cmd =
           case cmd of
             RunQuery query -> do result <- Local.queryCold acidState query
-                                 Strict.hPut handle (encode (token :: Int, Result result))
+                                 Strict.hPut handle (encode (Result result))
                                  hFlush handle
             RunUpdate update -> do result <- takeMVar =<< Local.scheduleColdUpdate acidState update
-                                   Strict.hPut handle (encode (token :: Int, Result result))
+                                   Strict.hPut handle (encode (Result result))
                                    hFlush handle
             CreateCheckpoint -> do Local.createCheckpoint acidState
-                                   Strict.hPut handle (encode (token, Acknowledgement))
+                                   Strict.hPut handle (encode Acknowledgement)
                                    hFlush handle
 
 
@@ -98,28 +100,36 @@ openRemote :: Local.IsAcidic st => HostName -> PortID -> IO (AcidState st)
 openRemote host port
   = do handle <- connectTo host port
        writeLock <- newMVar ()
-       ticker <- newMVar 0
-       callbacks <- newMVar (Map.empty :: Map.Map Int (Response -> IO ()))
-       let getCallback token = modifyMVar callbacks (\m -> return (Map.delete token m, Map.findWithDefault noCallback token m))
+       -- callbacks are added to the right and read from the left
+       callbacks <- newMVar (Seq.empty :: Seq.Seq (Response -> IO ()))
+       isClosed <- newIORef False
+       let getCallback =
+               modifyMVar callbacks $ \s -> return $
+               case Seq.viewl s of
+                 Seq.EmptyL -> noCallback
+                 (cb Seq.:< s') -> (s', cb)
            noCallback = error "openRemote: Internal error: Missing callback."
-           newToken = modifyMVar ticker (\uniqueToken -> return (uniqueToken+1, uniqueToken))
-           newCallback cb = do token <- newToken
-                               modifyMVar_ callbacks (\m -> return (Map.insert token cb m))
-                               return token
+           newCallback cb = modifyMVar_ callbacks (\s -> return (s Seq.|> cb))
            
            listener inp
              = case inp of
                  Fail msg       -> error msg
                  Partial cont   -> do inp <- Strict.hGetSome handle 1024
                                       listener (cont inp)
-                 Done (token,resp) rest -> do callback <- getCallback token
-                                              callback (resp :: Response)
-                                              listener (runGetPartial get rest)
-           actor cmd = do ref <- newEmptyMVar
-                          token <- newCallback (putMVar ref)
-                          withMVar writeLock $ \() -> Strict.hPut handle (encode (token, cmd)) >> hFlush handle
+                 Done resp rest -> do callback <- getCallback
+                                      callback (resp :: Response)
+                                      listener (runGetPartial get rest)
+           actor cmd = do readIORef isClosed >>= closedError
+                          ref <- newEmptyMVar
+                          withMVar writeLock $ \() -> do
+                            newCallback (putMVar ref)
+                            Strict.hPut handle (encode cmd) >> hFlush handle
                           return ref
-           shutdown = do modifyMVar ticker (\n -> n `seq` return $ error "The AcidState has been closed.")
+
+           closedError False = return ()
+           closedError True  = throwIO $ ErrorCall "The AcidState has been closed"
+
+           shutdown = do writeIORef isClosed True
                          hClose handle
        forkIO (listener (runGetPartial get Strict.empty))
        return (AcidState actor shutdown)
