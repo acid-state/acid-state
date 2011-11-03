@@ -1,8 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
 module Main (main) where
 
-import Data.Acid (makeAcidic)
-import Data.Acid.Local
+import Data.Acid
 import Data.Acid.Remote (acidServer)
 
 import Control.Exception (bracket)
@@ -17,6 +16,6 @@ import RemoteCommon
 main :: IO ()
 main =
     bracket
-      (openAcidState $ StressState 0)
+      (openLocalState $ StressState 0)
       closeAcidState
       (\s -> acidServer s (PortNumber 8080))

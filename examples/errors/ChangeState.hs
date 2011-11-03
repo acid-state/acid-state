@@ -41,10 +41,10 @@ main = do putStrLn "This example simulates what happens when you modify your sta
           putStrLn "without telling AcidState how to migrate from the old version to the new."
           putStrLn "Hopefully this program will fail with a readable error message."
           putStrLn ""
-          firstAcid <- openAcidStateFrom "state/ChangeState" (FirstState "first state")
+          firstAcid <- openLocalStateFrom "state/ChangeState" (FirstState "first state")
           createCheckpoint firstAcid
           closeAcidState firstAcid
 
-          secondAcid <- openAcidStateFrom "state/ChangeState" (SecondState (Text.pack "This initial value shouldn't be used"))
+          secondAcid <- openLocalStateFrom "state/ChangeState" (SecondState (Text.pack "This initial value shouldn't be used"))
           closeAcidState secondAcid
           putStrLn "If you see this message then something has gone wrong!"

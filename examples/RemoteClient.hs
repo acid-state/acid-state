@@ -1,6 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
 module Main (main) where
 
+import Data.Acid
+import Data.Acid.Advanced
 import Data.Acid.Remote
 
 import Control.Monad.State
@@ -17,7 +19,7 @@ import RemoteCommon
 -- This is how AcidState is used:
 
 open :: IO (AcidState StressState)
-open = openRemote "localhost" (PortNumber 8080)
+open = openRemoteState "localhost" (PortNumber 8080)
 
 main :: IO ()
 main = do args <- getArgs

@@ -1,8 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable, TypeFamilies, StandaloneDeriving #-}
 module Main (main) where
 
-import Data.Acid.Core
-import Data.Acid.Local
+import Data.Acid
+import Data.Acid.Advanced
 
 import qualified Control.Monad.State as State
 import Control.Monad.Reader
@@ -45,7 +45,7 @@ lookupKey key
 -- This is how AcidState is used:
 
 main :: IO ()
-main = do acid <- openAcidState (KeyValue Map.empty)
+main = do acid <- openLocalState (KeyValue Map.empty)
           args <- getArgs
           case args of
             [key]

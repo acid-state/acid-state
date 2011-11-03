@@ -41,10 +41,10 @@ main = do putStrLn "This example simulates what happens when you remove an event
           putStrLn "that is required to replay the journal."
           putStrLn "Hopefully this program will fail with a readable error message."
           putStrLn ""
-          firstAcid <- openAcidStateFrom "state/RemoveEvent" FirstState
+          firstAcid <- openLocalStateFrom "state/RemoveEvent" FirstState
           update firstAcid FirstEvent
           closeAcidState firstAcid
 
-          secondAcid <- openAcidStateFrom "state/RemoveEvent" SecondState
+          secondAcid <- openLocalStateFrom "state/RemoveEvent" SecondState
           closeAcidState secondAcid
           putStrLn "If you see this message then something has gone wrong!"

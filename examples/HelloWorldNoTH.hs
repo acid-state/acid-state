@@ -1,8 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable, TypeFamilies, StandaloneDeriving #-}
 module Main (main) where
 
-import Data.Acid.Core
-import Data.Acid.Local
+import Data.Acid
+import Data.Acid.Advanced
 
 import Control.Monad.State
 import Control.Monad.Reader
@@ -37,7 +37,7 @@ queryState = do HelloWorldState string <- ask
 -- This is how AcidState is used:
 
 main :: IO ()
-main = do acid <- openAcidState (HelloWorldState "Hello world")
+main = do acid <- openLocalState (HelloWorldState "Hello world")
           args <- getArgs
           if null args
              then do string <- query acid QueryState

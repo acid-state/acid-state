@@ -2,6 +2,7 @@
 module Main (main) where
 
 import Data.Acid
+import Data.Acid.Local ( createCheckpointAndClose )
 
 import Control.Monad.State
 import System.Environment
@@ -43,7 +44,7 @@ $(makeAcidic ''MyState ['failEvent, 'errorEvent, 'stateError, 'tick])
 -- This is how AcidState is used:
 
 main :: IO ()
-main = do acid <- openAcidStateFrom "state/Exceptions" (MyState 0)
+main = do acid <- openLocalStateFrom "state/Exceptions" (MyState 0)
           args <- getArgs
           case args of
             ["1"] -> update acid (undefined :: FailEvent)
@@ -51,6 +52,7 @@ main = do acid <- openAcidStateFrom "state/Exceptions" (MyState 0)
             ["3"] -> update acid ErrorEvent
             ["4"] -> update acid StateError
             _     -> do putStrLn "Call with '1', '2', '3' or '4' to test error scenarios."
+                        putStrLn "If the tick doesn't get stuck, everything is fine."
                         n <- update acid Tick
                         putStrLn $ "Tick: " ++ show n
            `catch` \e -> do putStrLn $ "Caught exception: " ++ show (e:: SomeException)

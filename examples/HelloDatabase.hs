@@ -31,7 +31,7 @@ $(makeAcidic ''Database ['addMessage, 'viewMessages])
 
 main :: IO ()
 main = do args <- getArgs
-          database <- openAcidStateFrom "myDatabase/" (Database ["Welcome to the acid-state database."])
+          database <- openLocalStateFrom "myDatabase/" (Database ["Welcome to the acid-state database."])
           if null args
             then do messages <- query database (ViewMessages 10)
                     putStrLn "Last 10 messages:"

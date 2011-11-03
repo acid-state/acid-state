@@ -13,40 +13,21 @@
 -- used for state operations without ACID guarantees (see "Data.Acid.Core").
 --
 
-module Data.Acid.Local
-    ( IsAcidic(..)
-    , AcidState
-    , Event(..)
-    , EventResult
-    , EventState
-    , UpdateEvent
-    , QueryEvent
-    , Update
-    , Query
-    , openAcidState
-    , openAcidStateFrom
-    , closeAcidState
-    , createCheckpoint
-    , createCheckpointAndClose
+module Data.Acid.Local 
+    ( openLocalState
+    , openLocalStateFrom
     , createArchive
-    , update
-    , scheduleUpdate
-    , scheduleColdUpdate
-    , query
-    , queryCold
-    , update'
-    , query'
-    , runQuery
-    ) where
+    , createCheckpointAndClose
+    ) where 
 
 import Data.Acid.Log as Log
 import Data.Acid.Core
 import Data.Acid.Common
+import qualified Data.Acid.Abstract as Abs
 
 import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar )
 --import Control.Exception              ( evaluate )
 import Control.Monad.State            ( runState )
-import Control.Monad.Trans            ( MonadIO(liftIO) )
 import Control.Applicative            ( (<$>), (<*>) )
 import Data.ByteString.Lazy           ( ByteString )
 --import qualified Data.ByteString.Lazy as Lazy ( length )
@@ -72,21 +53,22 @@ import System.FilePath                ( (</>) )
     [@Durability@] Successful transaction are guaranteed to survive system failure (both
                    hardware and software).
 -}
-data AcidState st
-    = AcidState { localCore        :: Core st
+data LocalState st
+    = LocalState { localCore        :: Core st
                 , localEvents      :: FileLog (Tagged ByteString)
                 , localCheckpoints :: FileLog Checkpoint
                 }
 
-
+{-
 -- | Issue an Update event and wait for its result. Once this call returns, you are
 --   guaranteed that the changes to the state are durable. Events may be issued in
 --   parallel.
 --
 --   It's a run-time error to issue events that aren't supported by the AcidState.
-update :: UpdateEvent event => AcidState (EventState event) -> event -> IO (EventResult event)
+update :: UpdateEvent event => LocalState (EventState event) -> event -> IO (EventResult event)
 update acidState event
     = takeMVar =<< scheduleUpdate acidState event
+-}
 
 -- | Issue an Update event and return immediately. The event is not durable
 --   before the MVar has been filled but the order of events is honored.
@@ -98,7 +80,7 @@ update acidState event
 --do scheduleUpdate acid EventA
 --   scheduleUpdate acid EventB
 --   @
-scheduleUpdate :: UpdateEvent event => AcidState (EventState event) -> event -> IO (MVar (EventResult event))
+scheduleUpdate :: UpdateEvent event => LocalState (EventState event) -> event -> IO (MVar (EventResult event))
 scheduleUpdate acidState event
     = do mvar <- newEmptyMVar
          let encoded = runPutLazy (safePut event)
@@ -113,7 +95,7 @@ scheduleUpdate acidState event
          return mvar
     where hotMethod = lookupHotMethod (coreMethods (localCore acidState)) event
 
-scheduleColdUpdate :: AcidState st -> Tagged ByteString -> IO (MVar ByteString)
+scheduleColdUpdate :: LocalState st -> Tagged ByteString -> IO (MVar ByteString)
 scheduleColdUpdate acidState event
     = do mvar <- newEmptyMVar
          modifyCoreState_ (localCore acidState) $ \st ->
@@ -124,14 +106,14 @@ scheduleColdUpdate acidState event
               return st'
          return mvar
     where coldMethod = lookupColdMethod (localCore acidState) event
-
+{-
 -- | Same as 'update' but lifted into any monad capable of doing IO.
-update' :: (UpdateEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
+update' :: (UpdateEvent event, MonadIO m) => LocalState (EventState event) -> event -> m (EventResult event)
 update' acidState event
     = liftIO (update acidState event)
-
+-}
 -- | Issue a Query event and wait for its result. Events may be issued in parallel.
-query  :: QueryEvent event  => AcidState (EventState event) -> event -> IO (EventResult event)
+query  :: QueryEvent event  => LocalState (EventState event) -> event -> IO (EventResult event)
 query acidState event
     = do mvar <- newEmptyMVar
          withCoreState (localCore acidState) $ \st ->
@@ -143,7 +125,8 @@ query acidState event
          takeMVar mvar
     where hotMethod = lookupHotMethod (coreMethods (localCore acidState)) event
 
-queryCold  :: AcidState st -> Tagged ByteString -> IO ByteString
+-- Whoa, a buttload of refactoring is needed here. 2011-11-02
+queryCold  :: LocalState st -> Tagged ByteString -> IO ByteString
 queryCold acidState event
     = do mvar <- newEmptyMVar
          withCoreState (localCore acidState) $ \st ->
@@ -154,19 +137,19 @@ queryCold acidState event
                 putMVar mvar result
          takeMVar mvar
     where coldMethod = lookupColdMethod (localCore acidState) event
-
+{-
 -- | Same as 'query' but lifted into any monad capable of doing IO.
-query' :: (QueryEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
+query' :: (QueryEvent event, MonadIO m) => LocalState (EventState event) -> event -> m (EventResult event)
 query' acidState event
     = liftIO (query acidState event)
-
+-}
 -- | Take a snapshot of the state and save it to disk. Creating checkpoints
 --   makes it faster to resume AcidStates and you're free to create them as
 --   often or seldom as fits your needs. Transactions can run concurrently
 --   with this call.
 --
 --   This call will not return until the operation has succeeded.
-createCheckpoint :: SafeCopy st => AcidState st -> IO ()
+createCheckpoint :: SafeCopy st => LocalState st -> IO ()
 createCheckpoint acidState
     = do mvar <- newEmptyMVar
          withCoreState (localCore acidState) $ \st ->
@@ -179,8 +162,8 @@ createCheckpoint acidState
 -- | Save a snapshot to disk and close the AcidState as a single atomic
 --   action. This is useful when you want to make sure that no events
 --   are saved to disk after a checkpoint.
-createCheckpointAndClose :: SafeCopy st => AcidState st -> IO ()
-createCheckpointAndClose acidState
+createCheckpointAndClose :: SafeCopy st => Abs.AcidState st -> IO ()
+createCheckpointAndClose abstract_state
     = do mvar <- newEmptyMVar
          closeCore' (localCore acidState) $ \st ->
            do eventId <- askCurrentEntryId (localEvents acidState)
@@ -189,6 +172,7 @@ createCheckpointAndClose acidState
          takeMVar mvar
          closeFileLog (localEvents acidState)
          closeFileLog (localCheckpoints acidState)
+  where acidState = downcast abstract_state
 
 
 data Checkpoint = Checkpoint EntryId ByteString
@@ -205,24 +189,24 @@ instance SafeCopy Checkpoint where
 -- | Create an AcidState given an initial value.
 --
 --   This will create or resume a log found in the \"state\/[typeOf state]\/\" directory.
-openAcidState :: (Typeable st, IsAcidic st)
+openLocalState :: (Typeable st, IsAcidic st)
               => st                          -- ^ Initial state value. This value is only used if no checkpoint is
                                              --   found.
-              -> IO (AcidState st)
-openAcidState initialState
-    = openAcidStateFrom ("state" </> show (typeOf initialState)) initialState
+              -> IO (Abs.AcidState st)
+openLocalState initialState
+    = openLocalStateFrom ("state" </> show (typeOf initialState)) initialState
 
 -- | Create an AcidState given a log directory and an initial value.
 --
 --   This will create or resume a log found in @directory@.
 --   Running two AcidState's from the same directory is an error
 --   but will not result in dataloss.
-openAcidStateFrom :: (IsAcidic st)
+openLocalStateFrom :: (IsAcidic st)
                   => FilePath            -- ^ Location of the checkpoint and transaction files.
                   -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
                                          --   found.
-                  -> IO (AcidState st)
-openAcidStateFrom directory initialState
+                  -> IO (Abs.AcidState st)
+openLocalStateFrom directory initialState
     = do core <- mkCore (eventsToMethods acidEvents) initialState
          let eventsLogKey = LogKey { logDirectory = directory
                                    , logPrefix = "events" }
@@ -242,17 +226,17 @@ openAcidStateFrom directory initialState
          events <- readEntriesFrom eventsLog n
          mapM_ (runColdMethod core) events
          checkpointsLog <- openFileLog checkpointsLogKey
-         return AcidState { localCore = core
-                          , localEvents = eventsLog
-                          , localCheckpoints = checkpointsLog
-                          }
+         return $ toAcidState LocalState { localCore = core
+                                         , localEvents = eventsLog
+                                         , localCheckpoints = checkpointsLog
+                                         }
 
 checkpointRestoreError msg
     = error $ "Could not parse saved checkpoint due to the following error: " ++ msg
 
 -- | Close an AcidState and associated logs.
 --   Any subsequent usage of the AcidState will throw an exception.
-closeAcidState :: AcidState st -> IO ()
+closeAcidState :: LocalState st -> IO ()
 closeAcidState acidState
     = do closeCore (localCore acidState)
          closeFileLog (localEvents acidState)
@@ -265,8 +249,8 @@ closeAcidState acidState
 --   has been thrown out.
 -- 
 --   This method is idempotent and does not block the normal operation of the AcidState.
-createArchive :: AcidState st -> IO ()
-createArchive state
+createArchive :: Abs.AcidState st -> IO ()
+createArchive abstract_state
   = do -- We need to look at the last checkpoint saved to disk. Since checkpoints can be written
        -- in parallel with this call, we can't guarantee that the checkpoint we get really is the
        -- last one but that's alright.
@@ -284,3 +268,19 @@ createArchive state
                  -- In the same style as above, we archive all log files that came before the log file
                  -- which contains our checkpoint.
                  archiveFileLog (localCheckpoints state) durableCheckpointId
+  where state = downcast abstract_state
+
+toAcidState :: IsAcidic st => LocalState st -> Abs.AcidState st
+toAcidState local
+  = Abs.AcidState { Abs._scheduleUpdate = scheduleUpdate local 
+                  , Abs.scheduleColdUpdate = scheduleColdUpdate local 
+                  , Abs._query = query local
+                  , Abs.queryCold = queryCold local
+                  , Abs.createCheckpoint = createCheckpoint local
+                  , Abs.closeAcidState = closeAcidState local
+                  , Abs.unsafeTag = "Local"
+                  , Abs.unsafeSubType = Abs.castToSubType local
+                  }
+
+downcast :: Abs.AcidState st -> LocalState st
+downcast = Abs.acidDowncast "Local"

@@ -1,8 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
 module Main (main) where
 
-import Data.Acid (makeAcidic)
-import Data.Acid.Local
+import Data.Acid
+import Data.Acid.Advanced (scheduleUpdate)
 
 import Control.Monad.State
 import Control.Monad.Reader
@@ -41,24 +41,21 @@ $(makeAcidic ''StressState ['pokeState, 'queryState, 'clearState])
 
 main :: IO ()
 main = do args <- getArgs
+          acid <- openLocalState (StressState 0)
           case args of
             ["checkpoint"]
-              -> do acid <- openAcidState (StressState 0)
-                    createCheckpoint acid
+              -> createCheckpoint acid
             ["query"]
-              -> do acid <- openAcidState (StressState 0)
-                    n <- query acid QueryState
+              -> do n <- query acid QueryState
                     putStrLn $ "State value: " ++ show n
             ["poke"]
-              -> do acid <- openAcidState (StressState 0)
-                    putStr "Issuing 100k transactions... "
+              -> do putStr "Issuing 100k transactions... "
                     hFlush stdout
                     replicateM_ (100000-1) (scheduleUpdate acid PokeState)
                     update acid PokeState
                     putStrLn "Done"
             ["clear"]
-              -> do acid <- openAcidState (StressState 0)
-                    update acid ClearState
+              -> do update acid ClearState
                     createCheckpoint acid
             _ -> do putStrLn $ "Commands:"
                     putStrLn $ "  query            Prints out the current state."

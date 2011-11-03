@@ -35,7 +35,7 @@ $(makeAcidic ''HelloWorldState ['writeState, 'queryState])
 -- This is how AcidState is used:
 
 main :: IO ()
-main = do acid <- openAcidState (HelloWorldState "Hello world")
+main = do acid <- openLocalState (HelloWorldState "Hello world")
           args <- getArgs
           if null args
              then do string <- query acid QueryState

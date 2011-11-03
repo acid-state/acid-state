@@ -1,8 +1,7 @@
 {-# LANGUAGE TemplateHaskell, DeriveDataTypeable, TypeFamilies #-}
 module RemoteCommon where
 
-import Data.Acid (makeAcidic)
-import Data.Acid.Local
+import Data.Acid
 
 import Control.Monad.State
 import Control.Monad.Reader

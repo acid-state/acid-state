@@ -2,8 +2,7 @@
 module Main (main) where
 
 import Data.Acid
-import qualified Data.Acid.Memory.Pure as Pure
-import qualified Data.Acid.Remote as Remote
+import Data.Acid.Remote
 
 import Control.Monad.State
 import Control.Monad.Reader
@@ -49,27 +48,7 @@ $(makeAcidic ''KeyValue ['insertKey, 'lookupKey])
 
 main :: IO ()
 main = do args <- getArgs
-          let port = 12345
-              host = "localhost"
-          case args of
-            ["remote"]
-              -> do putStrLn ("Acid server listening on port " ++ show port)
-                    acid <- openAcidState (KeyValue Map.empty)
-                    Remote.acidServer acid (PortNumber port)
-            ["remote", key]
-              -> do acid <- Remote.openRemote host (PortNumber port)
-                    mbKey <- Remote.query acid (LookupKey key)
-                    case mbKey of
-                      Nothing    -> putStrLn $ key ++ " has no associated value."
-                      Just value -> putStrLn $ key ++ " = " ++ value
-                    exitWith ExitSuccess
-            ["remote", key, val]
-              -> do acid <- Remote.openRemote host (PortNumber port)
-                    Remote.update acid (InsertKey key val)
-                    putStrLn "Done."
-                    exitWith ExitSuccess
-            _ -> return ()
-          acid <- openAcidState (KeyValue Map.empty)
+          acid <- openLocalState (KeyValue Map.empty)
           case args of
             [key]
               -> do mbKey <- query acid (LookupKey key)
@@ -82,7 +61,4 @@ main = do args <- getArgs
             _ -> do putStrLn "Usage:"
                     putStrLn "  key               Lookup the value of 'key'."
                     putStrLn "  key value         Set the value of 'key' to 'value'."
-                    putStrLn "  remote            Start the server on port 12345."
-                    putStrLn "  remote key        Connect to localhost:12345 and look for 'key'."
-                    putStrLn "  remote key value  Connect to localhost:12345 and set 'key' = 'value'."
           closeAcidState acid

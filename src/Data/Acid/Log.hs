@@ -170,7 +170,6 @@ readEntriesFrom fLog youngestEntry
              firstEntryId = case relevant of
                               []                     -> 0
                               ( logFile : _logFiles) -> rangeStart logFile
-
          archive <- liftM Lazy.concat $ mapM (Lazy.readFile . snd) relevant
          let entries = entriesToList $ readEntries archive
          return $ map decode'

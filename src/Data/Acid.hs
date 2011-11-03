@@ -15,16 +15,12 @@
  
 module Data.Acid
     ( AcidState
-    , openAcidState
-    , openAcidStateFrom
+    , openLocalState
+    , openLocalStateFrom
     , closeAcidState
     , createCheckpoint
-    , createCheckpointAndClose
-    , createArchive
     , update
     , query
-    , update'
-    , query'
     , EventResult
     , EventState
     , UpdateEvent
@@ -37,4 +33,6 @@ module Data.Acid
     ) where
 
 import Data.Acid.Local
+import Data.Acid.Common
+import Data.Acid.Abstract
 import Data.Acid.TemplateHaskell

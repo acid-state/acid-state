@@ -40,11 +40,11 @@ $(makeAcidic ''SlowCheckpoint ['setComputationallyHeavyData, 'tick])
 -- This is how AcidState is used:
 
 main :: IO ()
-main = do acid <- openAcidStateFrom "state/SlowCheckpoint" (SlowCheckpoint 0 0)
+main = do acid <- openLocalStateFrom "state/SlowCheckpoint" (SlowCheckpoint 0 0)
           putStrLn "This example illustrates that the state is still accessible while"
           putStrLn "a checkpoint is being serialized. This is an important property when"
           putStrLn "the size of a checkpoint reaches several hundred megabytes."
-          putStrLn "If you don't see any ticks while the creating is being created, something"
+          putStrLn "If you don't see any ticks while the checkpoint is being created, something"
           putStrLn "has gone awry."
           putStrLn ""
           doTick acid
