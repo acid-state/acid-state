@@ -7,7 +7,6 @@ module Data.Acid.TemplateHaskell
 import Language.Haskell.TH
 
 import Data.Acid.Core
---import Data.Acid.Local
 import Data.Acid.Common
 
 import Data.SafeCopy

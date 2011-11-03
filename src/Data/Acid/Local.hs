@@ -13,7 +13,7 @@
 -- used for state operations without ACID guarantees (see "Data.Acid.Core").
 --
 
-module Data.Acid.Local 
+module Data.Acid.Local
     ( openLocalState
     , openLocalStateFrom
     , createArchive
