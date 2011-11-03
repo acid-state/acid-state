@@ -74,24 +74,25 @@ instance Serialize Response where
 
 process :: SafeCopy st => Local.AcidState st -> Handle -> IO ()
 process acidState handle
-  = worker (runGetPartial get Strict.empty)
-  where worker inp
+  = do chan <- newChan
+       forkIO $ forever $ do response <- join (readChan chan)
+                             Strict.hPut handle (encode response)
+                             hFlush handle
+       worker chan (runGetPartial get Strict.empty)
+  where worker chan inp
           = case inp of
               Fail msg      -> return () -- error msg
               Partial cont  -> do inp <- Strict.hGetSome handle 1024
-                                  worker (cont inp)
-              Done cmd rest -> do processCommand cmd; worker (runGetPartial get rest)
-        processCommand cmd =
+                                  worker chan (cont inp)
+              Done cmd rest -> do processCommand chan cmd; worker chan (runGetPartial get rest)
+        processCommand chan cmd =
           case cmd of
             RunQuery query -> do result <- Local.queryCold acidState query
-                                 Strict.hPut handle (encode (Result result))
-                                 hFlush handle
-            RunUpdate update -> do result <- takeMVar =<< Local.scheduleColdUpdate acidState update
-                                   Strict.hPut handle (encode (Result result))
-                                   hFlush handle
+                                 writeChan chan (return $ Result result)
+            RunUpdate update -> do result <- Local.scheduleColdUpdate acidState update
+                                   writeChan chan (liftM Result $ takeMVar result)
             CreateCheckpoint -> do Local.createCheckpoint acidState
-                                   Strict.hPut handle (encode Acknowledgement)
-                                   hFlush handle
+                                   writeChan chan (return Acknowledgement)
 
 
 data AcidState st = AcidState (Command -> IO (MVar Response)) (IO ())
