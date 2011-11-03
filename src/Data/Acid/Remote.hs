@@ -24,7 +24,7 @@ import Data.Acid.Common
 import Network
 import qualified Data.ByteString as Strict
 import qualified Data.ByteString.Lazy as Lazy
-import Control.Exception (throwIO, ErrorCall(..))
+import Control.Exception (throwIO, ErrorCall(..), finally)
 import Control.Monad
 import Control.Concurrent
 import Data.IORef (newIORef, readIORef, writeIORef)
@@ -41,6 +41,7 @@ acidServer acidState port
   = do socket <- listenOn port
        forever $ do (handle, _host, _port) <- accept socket
                     forkIO (process acidState handle)
+         `finally` sClose socket
 
 data Command = RunQuery (Tagged Lazy.ByteString)
              | RunUpdate (Tagged Lazy.ByteString)
