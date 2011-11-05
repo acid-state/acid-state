@@ -23,6 +23,7 @@ import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar )
 import Control.Monad.State            ( runState )
 import Control.Monad.Trans            ( MonadIO(liftIO) )
 import Data.ByteString.Lazy           ( ByteString )
+import Data.Typeable
 
 import Data.SafeCopy                  ( SafeCopy(..) )
 
@@ -42,7 +43,7 @@ import Data.SafeCopy                  ( SafeCopy(..) )
 -}
 data MemoryState st
     = MemoryState { localCore    :: Core st
-                }
+                  } deriving (Typeable)
 {-
 -- | Issue an Update event and wait for its result. Once this call returns, you are
 --   guaranteed that the changes to the state are durable. Events may be issued in
@@ -145,6 +146,6 @@ toAcidState memory
                   , Abs.queryCold = queryCold memory
                   , Abs.createCheckpoint = createCheckpoint memory
                   , Abs.closeAcidState = closeAcidState memory
-                  , Abs.unsafeTag = "Memory"
+                  , Abs.unsafeTag = typeOf1 memory
                   , Abs.unsafeSubType = Abs.castToSubType memory
                   }

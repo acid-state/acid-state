@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, TypeFamilies #-}
+{-# LANGUAGE RankNTypes, TypeFamilies, GADTs #-}
 module Data.Acid.Abstract where
 
 import Data.Acid.Common
@@ -8,8 +8,12 @@ import Control.Concurrent
 import Data.ByteString.Lazy (ByteString)
 import Control.Monad.Trans (MonadIO(liftIO))
 import Data.Dynamic
+import Data.Typeable
 import GHC.Base (Any)
 import Unsafe.Coerce
+
+data AnyState st where
+  AnyState :: Typeable1 sub_st => sub_st st -> AnyState st
 
 -- Haddock doesn't get the type right on its own.
 {-| State container offering full ACID (Atomicity, Consistency, Isolation and Durability)
@@ -43,8 +47,8 @@ data AcidState st
 -- | Close an AcidState and associated resources.
 --   Any subsequent usage of the AcidState will throw an exception.
                 closeAcidState :: IO ()
-              , unsafeTag :: String
-              , unsafeSubType :: Any
+              , unsafeTag :: TypeRep
+              , unsafeSubType :: AnyState st
               }
 
 -- | Issue an Update event and return immediately. The event is not durable
@@ -80,15 +84,15 @@ query = _query
 query' :: (QueryEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
 query' acidState event = liftIO (query acidState event)
 
-castToSubType :: a -> Any
-castToSubType = unsafeCoerce
+castToSubType :: Typeable1 sub_st => sub_st st -> AnyState st
+castToSubType sub = AnyState sub
 
-acidDowncast :: String -> AcidState st -> sub st
-acidDowncast tag acidState
-  | tag == unsafeTag acidState
-    = unsafeCoerce (unsafeSubType acidState)
-  | otherwise
-    = error $ "Data.Acid: Invalid subtype cast: " ++ unsafeTag acidState ++ " -> " ++ tag
+downcast :: Typeable1 sub => AcidState st -> sub st
+downcast AcidState{unsafeSubType = AnyState sub, unsafeTag = tag}
+  = case gcast1 (Just sub) of
+      Just (Just typed_sub_struct) -> typed_sub_struct `asTypeOf` result
+      Nothing -> error $ "Data.Acid: Invalid subtype cast: " ++ show tag ++ " -> " ++ show (typeOf1 result)
+  where result = undefined
 
 {-
 fromLocal :: IsAcidic st => Local.AcidState st -> AcidState st

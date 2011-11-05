@@ -32,6 +32,7 @@ import Data.Serialize
 import Data.SafeCopy
 import System.IO
 import qualified Data.Sequence as Seq
+import Data.Typeable
 
 {- | Accept connections on @port@ and serve requests using the given 'AcidState'.
      This call doesn't return.
@@ -93,6 +94,7 @@ process acidState handle
 
 
 data RemoteState st = RemoteState (Command -> IO (MVar Response)) (IO ())
+                    deriving (Typeable)
 
 {- | Connect to a remotely running 'AcidState'. -}
 openRemoteState :: IsAcidic st => HostName -> PortID -> IO (Abs.AcidState st)
@@ -187,5 +189,5 @@ toAcidState remote
                   , Abs.createCheckpoint = createCheckpoint remote
                   , Abs.closeAcidState = closeAcidState remote
                   , Abs.unsafeSubType = Abs.castToSubType remote
-                  , Abs.unsafeTag = "Remote"
+                  , Abs.unsafeTag = typeOf1 remote
                   }

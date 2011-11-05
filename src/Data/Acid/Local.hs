@@ -36,7 +36,7 @@ import Data.ByteString.Lazy           ( ByteString )
 import Data.Serialize                 ( runPutLazy, runGetLazy )
 import Data.SafeCopy                  ( SafeCopy(..), safeGet, safePut
                                       , primitive, contain )
-import Data.Typeable                  ( Typeable, typeOf )
+import Data.Typeable                  ( Typeable, typeOf, typeOf1 )
 import System.FilePath                ( (</>) )
 
 
@@ -55,9 +55,9 @@ import System.FilePath                ( (</>) )
 -}
 data LocalState st
     = LocalState { localCore        :: Core st
-                , localEvents      :: FileLog (Tagged ByteString)
-                , localCheckpoints :: FileLog Checkpoint
-                }
+                 , localEvents      :: FileLog (Tagged ByteString)
+                 , localCheckpoints :: FileLog Checkpoint
+                 } deriving (Typeable)
 
 {-
 -- | Issue an Update event and wait for its result. Once this call returns, you are
@@ -172,7 +172,7 @@ createCheckpointAndClose abstract_state
          takeMVar mvar
          closeFileLog (localEvents acidState)
          closeFileLog (localCheckpoints acidState)
-  where acidState = downcast abstract_state
+  where acidState = Abs.downcast abstract_state
 
 
 data Checkpoint = Checkpoint EntryId ByteString
@@ -268,7 +268,7 @@ createArchive abstract_state
                  -- In the same style as above, we archive all log files that came before the log file
                  -- which contains our checkpoint.
                  archiveFileLog (localCheckpoints state) durableCheckpointId
-  where state = downcast abstract_state
+  where state = Abs.downcast abstract_state
 
 toAcidState :: IsAcidic st => LocalState st -> Abs.AcidState st
 toAcidState local
@@ -278,9 +278,7 @@ toAcidState local
                   , Abs.queryCold = queryCold local
                   , Abs.createCheckpoint = createCheckpoint local
                   , Abs.closeAcidState = closeAcidState local
-                  , Abs.unsafeTag = "Local"
+                  , Abs.unsafeTag = typeOf1 local
                   , Abs.unsafeSubType = Abs.castToSubType local
                   }
 
-downcast :: Abs.AcidState st -> LocalState st
-downcast = Abs.acidDowncast "Local"
