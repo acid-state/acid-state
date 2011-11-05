@@ -1,5 +1,14 @@
 {-# LANGUAGE RankNTypes, TypeFamilies, GADTs #-}
-module Data.Acid.Abstract where
+module Data.Acid.Abstract
+    ( AcidState(..)
+    , scheduleUpdate
+    , update
+    , update'
+    , query
+    , query'
+    , mkAnyState
+    , downcast
+    ) where
 
 import Data.Acid.Common
 import Data.Acid.Core
@@ -7,10 +16,7 @@ import Data.Acid.Core
 import Control.Concurrent
 import Data.ByteString.Lazy (ByteString)
 import Control.Monad.Trans (MonadIO(liftIO))
-import Data.Dynamic
 import Data.Typeable
-import GHC.Base (Any)
-import Unsafe.Coerce
 
 data AnyState st where
   AnyState :: Typeable1 sub_st => sub_st st -> AnyState st
@@ -47,8 +53,7 @@ data AcidState st
 -- | Close an AcidState and associated resources.
 --   Any subsequent usage of the AcidState will throw an exception.
                 closeAcidState :: IO ()
-              , unsafeTag :: TypeRep
-              , unsafeSubType :: AnyState st
+              , acidSubState :: AnyState st
               }
 
 -- | Issue an Update event and return immediately. The event is not durable
@@ -84,15 +89,16 @@ query = _query
 query' :: (QueryEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
 query' acidState event = liftIO (query acidState event)
 
-castToSubType :: Typeable1 sub_st => sub_st st -> AnyState st
-castToSubType sub = AnyState sub
+mkAnyState :: Typeable1 sub_st => sub_st st -> AnyState st
+mkAnyState sub = AnyState sub
 
 downcast :: Typeable1 sub => AcidState st -> sub st
-downcast AcidState{unsafeSubType = AnyState sub, unsafeTag = tag}
+downcast AcidState{acidSubState = AnyState sub}
   = case gcast1 (Just sub) of
       Just (Just typed_sub_struct) -> typed_sub_struct `asTypeOf` result
       Nothing -> error $ "Data.Acid: Invalid subtype cast: " ++ show tag ++ " -> " ++ show (typeOf1 result)
   where result = undefined
+        tag = show (typeOf1 sub)
 
 {-
 fromLocal :: IsAcidic st => Local.AcidState st -> AcidState st

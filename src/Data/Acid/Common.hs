@@ -1,5 +1,3 @@
-{- LANGUAGE GADTs, OverloadedStrings, DeriveDataTypeable, TypeFamilies,
-             FlexibleContexts, BangPatterns, CPP -}
 {-# LANGUAGE CPP, GeneralizedNewtypeDeriving, GADTs #-}
 -----------------------------------------------------------------------------
 -- |

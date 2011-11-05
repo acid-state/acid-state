@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, OverloadedStrings, DeriveDataTypeable, TypeFamilies,
+{-# LANGUAGE GADTs, DeriveDataTypeable, TypeFamilies,
              FlexibleContexts, BangPatterns #-}
 -----------------------------------------------------------------------------
 -- |

@@ -16,28 +16,27 @@ module Data.Acid.Remote
     ) where
 
 
-import qualified Data.Acid.Abstract as Abs
-import Data.Acid.Abstract (AcidState)
+import Data.Acid.Abstract
 import Data.Acid.Core
 import Data.Acid.Common
 
 import Network
 import qualified Data.ByteString as Strict
 import qualified Data.ByteString.Lazy as Lazy
-import Control.Exception (throwIO, ErrorCall(..), finally)
-import Control.Monad
+import Control.Exception                             ( throwIO, ErrorCall(..), finally )
+import Control.Monad                                 ( forever, liftM, join )
 import Control.Concurrent
-import Data.IORef (newIORef, readIORef, writeIORef)
+import Data.IORef                                    ( newIORef, readIORef, writeIORef )
 import Data.Serialize
-import Data.SafeCopy
-import System.IO
+import Data.SafeCopy                                 ( SafeCopy, safeGet, safePut )
+import System.IO                                     ( Handle, hFlush, hClose )
 import qualified Data.Sequence as Seq
-import Data.Typeable
+import Data.Typeable                                 ( Typeable )
 
 {- | Accept connections on @port@ and serve requests using the given 'AcidState'.
      This call doesn't return.
  -}
-acidServer :: SafeCopy st => Abs.AcidState st -> PortID -> IO ()
+acidServer :: SafeCopy st => AcidState st -> PortID -> IO ()
 acidServer acidState port
   = do socket <- listenOn port
        forever $ do (handle, _host, _port) <- accept socket
@@ -85,11 +84,11 @@ process acidState handle
               Done cmd rest -> do processCommand chan cmd; worker chan (runGetPartial get rest)
         processCommand chan cmd =
           case cmd of
-            RunQuery query -> do result <- Abs.queryCold acidState query
+            RunQuery query -> do result <- queryCold acidState query
                                  writeChan chan (return $ Result result)
-            RunUpdate update -> do result <- Abs.scheduleColdUpdate acidState update
+            RunUpdate update -> do result <- scheduleColdUpdate acidState update
                                    writeChan chan (liftM Result $ takeMVar result)
-            CreateCheckpoint -> do Abs.createCheckpoint acidState
+            CreateCheckpoint -> do createCheckpoint acidState
                                    writeChan chan (return Acknowledgement)
 
 
@@ -97,7 +96,7 @@ data RemoteState st = RemoteState (Command -> IO (MVar Response)) (IO ())
                     deriving (Typeable)
 
 {- | Connect to a remotely running 'AcidState'. -}
-openRemoteState :: IsAcidic st => HostName -> PortID -> IO (Abs.AcidState st)
+openRemoteState :: IsAcidic st => HostName -> PortID -> IO (AcidState st)
 openRemoteState host port
   = do handle <- connectTo host port
        writeLock <- newMVar ()
@@ -135,21 +134,21 @@ openRemoteState host port
        forkIO (listener (runGetPartial get Strict.empty))
        return (toAcidState $ RemoteState actor shutdown)
 
-query :: QueryEvent event => RemoteState (EventState event) -> event -> IO (EventResult event)
-query acidState event
+remoteQuery :: QueryEvent event => RemoteState (EventState event) -> event -> IO (EventResult event)
+remoteQuery acidState event
   = do let encoded = runPutLazy (safePut event)
-       resp <- queryCold acidState (methodTag event, encoded)
+       resp <- remoteQueryCold acidState (methodTag event, encoded)
        return (case runGetLazyFix safeGet resp of
                  Left msg -> error msg
                  Right result -> result)
 
-queryCold :: RemoteState st -> Tagged Lazy.ByteString -> IO Lazy.ByteString
-queryCold (RemoteState fn _shutdown) event
+remoteQueryCold :: RemoteState st -> Tagged Lazy.ByteString -> IO Lazy.ByteString
+remoteQueryCold (RemoteState fn _shutdown) event
   = do Result resp <- takeMVar =<< fn (RunQuery event)
        return resp
 
-scheduleUpdate :: UpdateEvent event => RemoteState (EventState event) -> event -> IO (MVar (EventResult event))
-scheduleUpdate (RemoteState fn _shutdown) event
+scheduleRemoteUpdate :: UpdateEvent event => RemoteState (EventState event) -> event -> IO (MVar (EventResult event))
+scheduleRemoteUpdate (RemoteState fn _shutdown) event
   = do let encoded = runPutLazy (safePut event)
        parsed <- newEmptyMVar
        respRef <- fn (RunUpdate (methodTag event, encoded))
@@ -159,35 +158,29 @@ scheduleUpdate (RemoteState fn _shutdown) event
                                       Right result -> result)
        return parsed
 
-scheduleColdUpdate :: RemoteState st -> Tagged Lazy.ByteString -> IO (MVar Lazy.ByteString)
-scheduleColdUpdate (RemoteState fn _shutdown) event
+scheduleRemoteColdUpdate :: RemoteState st -> Tagged Lazy.ByteString -> IO (MVar Lazy.ByteString)
+scheduleRemoteColdUpdate (RemoteState fn _shutdown) event
   = do parsed <- newEmptyMVar
        respRef <- fn (RunUpdate event)
        forkIO $ do Result resp <- takeMVar respRef
                    putMVar parsed resp
        return parsed
 
-closeAcidState :: RemoteState st -> IO ()
-closeAcidState (RemoteState _fn shutdown) = shutdown
+closeRemoteState :: RemoteState st -> IO ()
+closeRemoteState (RemoteState _fn shutdown) = shutdown
 
-createCheckpoint :: RemoteState st -> IO ()
-createCheckpoint (RemoteState fn _shutdown)
+createRemoteCheckpoint :: RemoteState st -> IO ()
+createRemoteCheckpoint (RemoteState fn _shutdown)
   = do Acknowledgement <- takeMVar =<< fn CreateCheckpoint
        return ()
 
--- I'm not sure what I feel about 'createCheckpointAndClose'. 2011-11-3 Lemmih.
---createCheckpointAndClose :: RemoteState st -> IO ()
---createCheckpointAndClose = createCheckpoint
-
-
 toAcidState :: IsAcidic st => RemoteState st -> AcidState st
 toAcidState remote
-  = Abs.AcidState { Abs._scheduleUpdate = scheduleUpdate remote 
-                  , Abs.scheduleColdUpdate = scheduleColdUpdate remote 
-                  , Abs._query = query remote
-                  , Abs.queryCold = queryCold remote
-                  , Abs.createCheckpoint = createCheckpoint remote
-                  , Abs.closeAcidState = closeAcidState remote
-                  , Abs.unsafeSubType = Abs.castToSubType remote
-                  , Abs.unsafeTag = typeOf1 remote
-                  }
+  = AcidState { _scheduleUpdate    = scheduleRemoteUpdate remote
+              , scheduleColdUpdate = scheduleRemoteColdUpdate remote
+              , _query             = remoteQuery remote
+              , queryCold          = remoteQueryCold remote
+              , createCheckpoint   = createRemoteCheckpoint remote
+              , closeAcidState     = closeRemoteState remote
+              , acidSubState       = mkAnyState remote
+              }

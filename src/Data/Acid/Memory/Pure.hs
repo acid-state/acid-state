@@ -1,5 +1,4 @@
-{-# LANGUAGE GADTs, OverloadedStrings, DeriveDataTypeable, TypeFamilies,
-             GeneralizedNewtypeDeriving, BangPatterns, CPP #-}
+{-# LANGUAGE DeriveDataTypeable, BangPatterns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Data.Acid.Memory.Pure
