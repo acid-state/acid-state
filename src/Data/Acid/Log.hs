@@ -1,4 +1,3 @@
-{-# LANGUAGE ForeignFunctionInterface #-}
 -- A log is a stack of entries that supports efficient pushing of
 -- new entries and fetching of old. It can be considered an
 -- extendible array of entries.
@@ -58,8 +57,7 @@ data LogKey object
       }
 
 formatLogFile :: String -> EntryId -> String
-formatLogFile tag n
-    = printf "%s-%010d.log" tag n
+formatLogFile = printf "%s-%010d.log"
 
 findLogFiles :: LogKey object -> IO [(EntryId, FilePath)]
 findLogFiles identifier
@@ -130,13 +128,11 @@ writeToDisk _ [] = return ()
 writeToDisk handle xs
     = do mapM_ worker xs
          flush handle
-         return ()
     where worker bs
               = do let len = Strict.length bs
                    count <- Strict.unsafeUseAsCString bs $ \ptr -> write handle (castPtr ptr) (fromIntegral len)
-                   if fromIntegral count < len
-                      then worker (Strict.drop (fromIntegral count) bs)
-                      else return ()
+                   when (fromIntegral count < len) $
+                      worker (Strict.drop (fromIntegral count) bs)
 
 
 closeFileLog :: FileLog object -> IO ()
@@ -197,9 +193,9 @@ filterLogFiles minEntryIdMb maxEntryIdMb logFiles
           | otherwise                       -- If 'left' starts after our maxEntryId then we're done.
           = []
         ltMinEntryId = case minEntryIdMb of Nothing         -> const False
-                                            Just minEntryId -> \entryId -> entryId < minEntryId
+                                            Just minEntryId -> (< minEntryId)
         ltMaxEntryId = case maxEntryIdMb of Nothing         -> const True
-                                            Just maxEntryId -> \entryId -> entryId < maxEntryId
+                                            Just maxEntryId -> (< maxEntryId)
         rangeStart (firstEntryId, _path) = firstEntryId
 
 -- Move all log files that do not contain entries equal or higher than the given entryId

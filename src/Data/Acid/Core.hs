@@ -112,8 +112,7 @@ modifyCoreState_ core action
 
 -- | Access the state component.
 withCoreState :: Core st -> (st -> IO a) -> IO a
-withCoreState core action
-    = withMVar (coreState core) action
+withCoreState core = withMVar (coreState core)
 
 -- | Execute a method as given by a type identifier and an encoded string.
 --   The exact format of the encoded string depends on the type identifier.

@@ -77,9 +77,9 @@ query acidState event
     where hotMethod = lookupHotMethod (localMethods acidState) event
 
 -- | Create an AcidState given an initial value.
-openAcidState :: (IsAcidic st)
+openAcidState :: IsAcidic st
               => st                          -- ^ Initial state value. 
-              -> (AcidState st)
+              -> AcidState st
 openAcidState initialState
     = AcidState { localMethods = mkMethodMap (eventsToMethods acidEvents) 
                 , localState   = initialState }

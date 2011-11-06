@@ -51,7 +51,7 @@ instance Serialize Command where
   put cmd = case cmd of
               RunQuery query   -> do putWord8 0; put query
               RunUpdate update -> do putWord8 1; put update
-              CreateCheckpoint -> do putWord8 2
+              CreateCheckpoint ->    putWord8 2
   get = do tag <- getWord8
            case tag of
              0 -> liftM RunQuery get

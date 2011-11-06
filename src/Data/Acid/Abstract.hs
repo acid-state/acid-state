@@ -13,15 +13,15 @@ module Data.Acid.Abstract
 import Data.Acid.Common
 import Data.Acid.Core
 
-import Control.Concurrent
-import Data.ByteString.Lazy (ByteString)
-import Control.Monad.Trans (MonadIO(liftIO))
-import Data.Typeable
+import Control.Concurrent      ( MVar, takeMVar )
+import Data.ByteString.Lazy    ( ByteString )
+import Control.Monad.Trans     ( MonadIO(liftIO) )
+import Data.Typeable           ( Typeable1, gcast1, typeOf1 )
 
 data AnyState st where
   AnyState :: Typeable1 sub_st => sub_st st -> AnyState st
 
--- Haddock doesn't get the type right on its own.
+-- Haddock doesn't get the types right on its own.
 {-| State container offering full ACID (Atomicity, Consistency, Isolation and Durability)
     guarantees.
 
@@ -67,7 +67,7 @@ data AcidState st
 --   scheduleUpdate acid EventB
 --   @
 scheduleUpdate :: UpdateEvent event => AcidState (EventState event) -> event -> IO (MVar (EventResult event))
-scheduleUpdate = _scheduleUpdate
+scheduleUpdate = _scheduleUpdate -- Redirection to make Haddock happy.
 
 -- | Issue an Update event and wait for its result. Once this call returns, you are
 --   guaranteed that the changes to the state are durable. Events may be issued in
@@ -83,14 +83,14 @@ update' acidState event = liftIO (update acidState event)
 
 -- | Issue a Query event and wait for its result. Events may be issued in parallel.
 query :: QueryEvent event => AcidState (EventState event) -> event -> IO (EventResult event)
-query = _query
+query = _query -- Redirection to make Haddock happy.
 
 -- | Same as 'query' but lifted into any monad capable of doing IO.
 query' :: (QueryEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
 query' acidState event = liftIO (query acidState event)
 
 mkAnyState :: Typeable1 sub_st => sub_st st -> AnyState st
-mkAnyState sub = AnyState sub
+mkAnyState = AnyState
 
 downcast :: Typeable1 sub => AcidState st -> sub st
 downcast AcidState{acidSubState = AnyState sub}
@@ -100,24 +100,3 @@ downcast AcidState{acidSubState = AnyState sub}
   where result = undefined
         tag = show (typeOf1 sub)
 
-{-
-fromLocal :: IsAcidic st => Local.AcidState st -> AcidState st
-fromLocal local
-  = AcidState { scheduleUpdate = Local.scheduleUpdate local 
-              , scheduleColdUpdate = Local.scheduleColdUpdate local 
-              , query = Local.query local
-              , queryCold = Local.queryCold local
-              , createCheckpoint = Local.createCheckpoint local
-              , closeAcidState = Local.closeAcidState local
-              }
-
-fromMemory :: IsAcidic st => Memory.AcidState st -> AcidState st
-fromMemory memory
-  = AcidState { scheduleUpdate = Memory.scheduleUpdate memory 
-              , scheduleColdUpdate = Memory.scheduleColdUpdate memory 
-              , query = Memory.query memory
-              , queryCold = Memory.queryCold memory
-              , createCheckpoint = Memory.createCheckpoint memory
-              , closeAcidState = Memory.closeAcidState memory
-              }
--}
