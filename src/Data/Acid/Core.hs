@@ -164,7 +164,7 @@ lookupHotMethod methodMap method
              -- trouble. Luckly, it would take deliberate malevolence for that to happen.
              unsafeCoerce methodHandler method
 
--- | Method tags must be unique and are most commenly generated automatically.
+-- | Method tags must be unique and are most commonly generated automatically.
 type Tag = Lazy.ByteString
 type Tagged a = (Tag, a)
 
