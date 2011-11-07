@@ -89,7 +89,7 @@ makeIsAcidic eventNames stateName tyvars constructors
              handlers = zipWith makeEventHandler eventNames types
              cxtFromEvents = nub $ concat $ zipWith (eventCxts stateType' tyvars) eventNames types
          cxts' <- mkCxtFromTyVars preds tyvars cxtFromEvents
-         instanceD (return $ cxts') ty
+         instanceD (return cxts') ty
                    [ valD (varP 'acidEvents) (normalB (listE handlers)) [] ]
     where stateType = foldl appT (conT stateName) [ varT var | PlainTV var <- tyvars ]
 
@@ -133,7 +133,7 @@ eventCxts :: Type        -- ^ State type (used for error messages)
           -> Type        -- ^ 'Type' of the event
           -> [Pred]      -- ^ extra context to add to 'IsAcidic' instance
 eventCxts targetStateType targetTyVars eventName eventType =
-    let (tyvars, cxt, args, stateType, resultType, isUpdate) 
+    let (_tyvars, cxt, _args, stateType, _resultType, _isUpdate) 
                     = analyseType eventName eventType
         eventTyVars = findTyVars stateType -- find the type variable names that this event is using for the State type
         table       = zip eventTyVars (map tyVarBndrName targetTyVars) -- create a lookup table
@@ -191,7 +191,7 @@ makeEventHandler eventName eventType
           assertTyVarsOk =
               case tyVarNames \\ stateTypeTyVars of
                 [] -> return ()
-                ns -> error $ unlines $
+                ns -> error $ unlines
                       [show $ ppr_sig eventName eventType
                       , ""
                       , "can not be used as an UpdateEvent because it contains the type variables: "
@@ -308,7 +308,7 @@ analyseType eventName t
 findTyVars :: Type -> [Name]
 findTyVars (ForallT _ _ a) = findTyVars a
 findTyVars (VarT n)   = [n]
-findTyVars (AppT a b) = (findTyVars a) ++  (findTyVars b)
+findTyVars (AppT a b) = findTyVars a ++ findTyVars b
 findTyVars (SigT a _) = findTyVars a
 findTyVars _          = []
 
