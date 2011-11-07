@@ -5,10 +5,12 @@ module Data.Acid.TemplateHaskell
     ) where
 
 import Language.Haskell.TH
+import Language.Haskell.TH.Ppr
 
 import Data.Acid.Core
 import Data.Acid.Common
 
+import Data.List ((\\), nub)
 import Data.SafeCopy
 import Data.Typeable
 import Data.Char
@@ -78,27 +80,130 @@ getEventType eventName
            _ -> error $ "Events must be functions: " ++ show eventName
 
 --instance (SafeCopy key, Typeable key, SafeCopy val, Typeable val) => IsAcidic State where
---  acidEvents = [ UpdateEven (\(MyUpdateEvent arg1 arg2 -> myUpdateEvent arg1 arg2) ]
+--  acidEvents = [ UpdateEvent (\(MyUpdateEvent arg1 arg2 -> myUpdateEvent arg1 arg2) ]
 makeIsAcidic eventNames stateName tyvars constructors
     = do types <- mapM getEventType eventNames
+         stateType' <- stateType
          let preds = [ ''SafeCopy, ''Typeable ]
              ty = appT (conT ''IsAcidic) stateType
              handlers = zipWith makeEventHandler eventNames types
-         instanceD (mkCxtFromTyVars preds tyvars []) ty
+             cxtFromEvents = nub $ concat $ zipWith (eventCxts stateType' tyvars) eventNames types
+         cxts' <- mkCxtFromTyVars preds tyvars cxtFromEvents
+         instanceD (return $ cxts') ty
                    [ valD (varP 'acidEvents) (normalB (listE handlers)) [] ]
     where stateType = foldl appT (conT stateName) [ varT var | PlainTV var <- tyvars ]
+
+-- | This function analyses an event function and extracts any
+-- additional class contexts which need to be added to the IsAcidic
+-- instance.
+--
+-- For example, if we have:
+--
+-- > data State a = ...
+--
+-- > setState :: (Ord a) => a -> UpdateEvent (State a) ()
+--
+-- Then we need to generate an IsAcidic instance like:
+--
+-- > instance (SafeCopy a, Typeable a, Ord a) => IsAcidic (State a)
+--
+-- Note that we can only add constraints for type variables which
+-- appear in the State type. If we tried to do this:
+--
+-- > setState :: (Ord a, Ord b) => a -> b -> UpdateEvent (State a) ()
+--
+-- We will get an ambigious type variable when trying to create the
+-- 'IsAcidic' instance, because there is no way to figure out what
+-- type 'b' should be.
+-- 
+-- The tricky part of this code is that we need to unify the type
+-- variables.
+--
+-- Let's say the user writes their code using 'b' instead of 'a':
+--
+-- > setState :: (Ord b) => b -> UpdateEvent (State b) ()
+--
+-- In the 'IsAcidic' instance, we are still going to use 'a'. So we
+-- need to rename the variables in the context to match.
+--
+-- The contexts returned by this function will have the variables renamed.
+eventCxts :: Type        -- ^ State type (used for error messages)
+          -> [TyVarBndr] -- ^ type variables that will be used for the State type in the IsAcidic instance
+          -> Name        -- ^ 'Name' of the event
+          -> Type        -- ^ 'Type' of the event
+          -> [Pred]      -- ^ extra context to add to 'IsAcidic' instance
+eventCxts targetStateType targetTyVars eventName eventType =
+    let (tyvars, cxt, args, stateType, resultType, isUpdate) 
+                    = analyseType eventName eventType
+        eventTyVars = findTyVars stateType -- find the type variable names that this event is using for the State type
+        table       = zip eventTyVars (map tyVarBndrName targetTyVars) -- create a lookup table
+    in map (unify table) cxt -- rename the type variables
+    where
+      -- | rename the type variables in a Pred
+      unify :: [(Name, Name)] -> Pred -> Pred
+      unify table p@(ClassP n tys) = ClassP n (map (rename p table) tys)
+      unify table p@(EqualP a b)   = EqualP (rename p table a) (rename p table b)
+
+      -- | rename the type variables in a Type
+      rename :: Pred -> [(Name, Name)] -> Type -> Type
+      rename pred table t@(ForallT tyvarbndrs cxt typ) = -- this is probably wrong? I don't think acid-state can really handle this type anyway..
+          ForallT (map renameTyVar tyvarbndrs) (map (unify table) cxt) (rename pred table typ)
+          where
+            renameTyVar (PlainTV name)    = PlainTV  (renameName pred table name)
+            renameTyVar (KindedTV name k) = KindedTV (renameName pred table name) k
+      rename pred table (VarT n)   = VarT $ renameName pred table n
+      rename pred table (AppT a b) = AppT (rename pred table a) (rename pred table b)
+      rename pred table (SigT a k) = SigT (rename pred table a) k
+      rename _    _     typ        = typ
+
+      -- | rename a 'Name'
+      renameName :: Pred -> [(Name, Name)] -> Name -> Name
+      renameName pred table n = 
+          case lookup n table of
+            Nothing -> error $ unlines [ show $ ppr_sig eventName eventType
+                                       , ""
+                                       , "can not be used as an UpdateEvent because the class context: "
+                                       , ""
+                                       , pprint pred
+                                       , ""
+                                       , "contains a type variable which is not found in the state type: " 
+                                       , ""
+                                       , pprint targetStateType
+                                       , ""
+                                       , "You may be able to fix this by providing a type signature that fixes these type variable(s)"
+                                       ]
+            (Just n') -> n'
 
 -- UpdateEvent (\(MyUpdateEvent arg1 arg2) -> myUpdateEvent arg1 arg2)
 makeEventHandler :: Name -> Type -> ExpQ
 makeEventHandler eventName eventType
-    = do vars <- replicateM (length args) (newName "arg")
+    = do assertTyVarsOk
+         vars <- replicateM (length args) (newName "arg")
          let lamClause = conP eventStructName [varP var | var <- vars ]
          conE constr `appE` lamE [lamClause] (foldl appE (varE eventName) (map varE vars))
     where constr = if isUpdate then 'UpdateEvent else 'QueryEvent
-          (_tyvars, _cxt, args, _stateType, _resultType, isUpdate) = analyseType eventName eventType
+          (tyvars, _cxt, args, stateType, _resultType, isUpdate) = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
+          stateTypeTyVars = findTyVars stateType
+          tyVarNames = map tyVarBndrName tyvars
+          assertTyVarsOk =
+              case tyVarNames \\ stateTypeTyVars of
+                [] -> return ()
+                ns -> error $ unlines $
+                      [show $ ppr_sig eventName eventType
+                      , ""
+                      , "can not be used as an UpdateEvent because it contains the type variables: "
+                      , ""
+                      , pprint ns
+                      , ""
+                      , "which do not appear in the state type:"
+                      , ""
+                      , pprint stateType
+                      ]
+                      
+                      
 
 --data MyUpdateEvent = MyUpdateEvent Arg1 Arg2
 --  deriving (Typeable)
@@ -182,7 +287,7 @@ analyseType eventName t
                                 ForallT binds [] t' ->
                                   (binds, [], t')
                                 ForallT binds cxt t' ->
-                                  error $ "Context restrictions on events aren't supported yet: " ++ show eventName
+                                  (binds, cxt, t')
                                 _ -> ([], [], t)
           args = getArgs t'
           (stateType, resultType, isUpdate) = findMonad t'
@@ -197,3 +302,17 @@ analyseType eventName t
               | con == ''Update = (state, result, True)
               | con == ''Query  = (state, result, False)
           findMonad _ = error $ "Event has an invalid type signature: Not an Update or a Query: " ++ show eventName
+
+-- | find the type variables
+-- | e.g. State a b  ==> [a,b]
+findTyVars :: Type -> [Name]
+findTyVars (ForallT _ _ a) = findTyVars a
+findTyVars (VarT n)   = [n]
+findTyVars (AppT a b) = (findTyVars a) ++  (findTyVars b)
+findTyVars (SigT a _) = findTyVars a
+findTyVars _          = []
+
+-- | extract the 'Name' from a 'TyVarBndr'
+tyVarBndrName :: TyVarBndr -> Name
+tyVarBndrName (PlainTV n)    = n
+tyVarBndrName (KindedTV n _) = n
