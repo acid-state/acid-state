@@ -39,8 +39,8 @@ import Data.Typeable                                 ( Typeable )
 acidServer :: SafeCopy st => AcidState st -> PortID -> IO ()
 acidServer acidState port
   = do socket <- listenOn port
-       forever $ do (handle, _host, _port) <- accept socket
-                    forkIO (process acidState handle)
+       forever (do (handle, _host, _port) <- accept socket
+                   forkIO (process acidState handle))
          `finally` sClose socket
 
 data Command = RunQuery (Tagged Lazy.ByteString)
