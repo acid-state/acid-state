@@ -94,9 +94,10 @@ mkAnyState = AnyState
 
 downcast :: Typeable1 sub => AcidState st -> sub st
 downcast AcidState{acidSubState = AnyState sub}
-  = case gcast1 (Just sub) of
-      Just (Just typed_sub_struct) -> typed_sub_struct `asTypeOf` result
-      Nothing -> error $ "Data.Acid: Invalid subtype cast: " ++ show tag ++ " -> " ++ show (typeOf1 result)
-  where result = undefined
-        tag = show (typeOf1 sub)
-
+  = r 
+ where
+   r = case gcast1 (Just sub) of
+         Just (Just x) -> x
+         Nothing ->
+           error $
+            "Data.Acid: Invalid subtype cast: " ++ show (typeOf1 sub) ++ " -> " ++ show (typeOf1 r)  
