@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, GeneralizedNewtypeDeriving, GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, GADTs #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Data.Acid.Common
@@ -32,19 +32,21 @@ class (SafeCopy st) => IsAcidic st where
 
 -- | Context monad for Update events.
 newtype Update st a = Update { unUpdate :: State st a }
-#if MIN_VERSION_mtl(2,0,0)
-    deriving (Monad, Functor, Applicative, MonadState st)
-#else
     deriving (Monad, Functor, MonadState st)
-#endif
+
+-- mtl pre-2.0 doesn't have these instances to newtype-derive, but they're
+-- simple enough.
+instance Applicative (Update st) where
+    pure = return
+    (<*>) = ap
 
 -- | Context monad for Query events.
 newtype Query st a  = Query { unQuery :: Reader st a }
-#if MIN_VERSION_mtl(2,0,0)
-    deriving (Monad, Functor, Applicative, MonadReader st)
-#else
     deriving (Monad, Functor, MonadReader st)
-#endif
+
+instance Applicative (Query st) where
+    pure = return
+    (<*>) = ap
 
 -- | Run a query in the Update Monad.
 runQuery :: Query st a -> Update st a
