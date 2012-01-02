@@ -42,6 +42,10 @@ Extra-source-files:  examples/*.hs, examples/errors/*.hs, src-win32/*.hs, src-un
 -- Constraint on the version of Cabal needed to build this package.
 Cabal-version:       >=1.6
 
+Source-repository head
+  type:          darcs
+  location:      http://mirror.seize.it/acid-state/
+
 
 Library
   -- Modules exported by the library.
