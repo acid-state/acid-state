@@ -11,6 +11,8 @@ module Data.Acid.Log
     , pushEntry
     , pushAction
     , readEntriesFrom
+    , rollbackTo
+    , rollbackWhile
     , newestEntry
     , askCurrentEntryId
     , cutFileLog
@@ -20,6 +22,7 @@ module Data.Acid.Log
 import Data.Acid.Archive as Archive
 import System.Directory
 import System.FilePath
+import System.IO
 import FileIO
 
 import Foreign.Ptr
@@ -171,8 +174,46 @@ readEntriesFrom fLog youngestEntry
          return $ map decode'
                 $ take (entryCap - youngestEntry)             -- Take events under the eventCap.
                 $ drop (youngestEntry - firstEntryId) entries -- Drop entries that are too young.
-
     where rangeStart (firstEntryId, _path) = firstEntryId
+
+-- Obliterate log entries younger than or equal to the EventId. Very unsafe, can't be undone
+rollbackTo :: SafeCopy object => LogKey object -> EntryId -> IO ()
+rollbackTo identifier youngestEntry
+  = do logFiles <- findLogFiles identifier
+       let sorted = sort logFiles
+           loop [] = return ()
+           loop ((rangeStart, path) : xs)
+             = if rangeStart >= youngestEntry
+                  then do {-putStrLn ("Removing file: "++path); -}removeFile path; loop xs
+                  else do archive <- Strict.readFile path
+                          pathHandle <- openFile path WriteMode
+                          let entries = entriesToList $ readEntries (Lazy.fromChunks [archive])
+                              entriesToKeep = take (youngestEntry - rangeStart + 1) entries
+                              lengthToKeep = Lazy.length (packEntries entriesToKeep)
+                          --putStrLn $ "FileSize: " ++ show (lengthToKeep, Strict.length archive)
+                          hSetFileSize pathHandle (fromIntegral lengthToKeep)
+                          hClose pathHandle
+       loop (reverse sorted)
+
+-- Obliterate log entries as long as the filterFn returns True.
+rollbackWhile :: SafeCopy object => LogKey object -> (object -> Bool) -> IO ()
+rollbackWhile identifier filterFn
+  = do logFiles <- findLogFiles identifier
+       let sorted = sort logFiles
+           loop [] = return ()
+           loop ((_rangeStart, path) : xs)
+             = do archive <- Strict.readFile path
+                  let entries = entriesToList $ readEntries (Lazy.fromChunks [archive])
+                      entriesToSkip = takeWhile (filterFn . decode') $ reverse entries
+                      skip_size = Lazy.length (packEntries entriesToSkip)
+                      orig_size = fromIntegral $ Strict.length archive
+                      new_size = orig_size - skip_size
+                  if new_size == 0
+                     then do removeFile path; loop xs
+                     else do pathHandle <- openFile path WriteMode 
+                             hSetFileSize pathHandle (fromIntegral new_size) 
+                             hClose pathHandle
+       loop (reverse sorted)
 
 -- Filter out log files that are outside the min_entry/max_entry range.
 -- minEntryId <= x < maxEntryId
