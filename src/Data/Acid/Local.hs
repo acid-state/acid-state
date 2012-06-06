@@ -17,7 +17,7 @@ module Data.Acid.Local
     , openLocalStateFrom
     , createArchive
     , createCheckpointAndClose
-    ) where 
+    ) where
 
 import Data.Acid.Log as Log
 import Data.Acid.Core
@@ -36,6 +36,7 @@ import Data.Serialize                 ( runPutLazy, runGetLazy )
 import Data.SafeCopy                  ( SafeCopy(..), safeGet, safePut
                                       , primitive, contain )
 import Data.Typeable                  ( Typeable, typeOf )
+import Data.IORef
 import System.FilePath                ( (</>) )
 
 
@@ -54,6 +55,7 @@ import System.FilePath                ( (</>) )
 -}
 data LocalState st
     = LocalState { localCore        :: Core st
+                 , localCopy        :: IORef st
                  , localEvents      :: FileLog (Tagged ByteString)
                  , localCheckpoints :: FileLog Checkpoint
                  } deriving (Typeable)
@@ -79,7 +81,8 @@ scheduleLocalUpdate acidState event
            do let !(result, !st') = runState hotMethod st
               -- Schedule the log entry. Very important that it happens when 'localCore' is locked
               -- to ensure that events are logged in the same order that they are executed.
-              pushEntry (localEvents acidState) (methodTag event, encoded) $ putMVar mvar result
+              pushEntry (localEvents acidState) (methodTag event, encoded) $ do writeIORef (localCopy acidState) st'
+                                                                                putMVar mvar result
               return st'
          return mvar
     where hotMethod = lookupHotMethod (coreMethods (localCore acidState)) event
@@ -91,7 +94,8 @@ scheduleLocalColdUpdate acidState event
            do let !(result, !st') = runState coldMethod st
               -- Schedule the log entry. Very important that it happens when 'localCore' is locked
               -- to ensure that events are logged in the same order that they are executed.
-              pushEntry (localEvents acidState) event $ putMVar mvar result
+              pushEntry (localEvents acidState) event $ do writeIORef (localCopy acidState) st'
+                                                           putMVar mvar result
               return st'
          return mvar
     where coldMethod = lookupColdMethod (localCore acidState) event
@@ -99,27 +103,17 @@ scheduleLocalColdUpdate acidState event
 -- | Issue a Query event and wait for its result. Events may be issued in parallel.
 localQuery  :: QueryEvent event  => LocalState (EventState event) -> event -> IO (EventResult event)
 localQuery acidState event
-    = do mvar <- newEmptyMVar
-         withCoreState (localCore acidState) $ \st ->
-           do let (result, _st) = runState hotMethod st
-              -- Make sure that we do not return the result before the event log has
-              -- been flushed to disk.
-              pushAction (localEvents acidState) $
-                putMVar mvar result
-         takeMVar mvar
+    = do st <- readIORef (localCopy acidState)
+         let (result, _st) = runState hotMethod st
+         return result
     where hotMethod = lookupHotMethod (coreMethods (localCore acidState)) event
 
 -- Whoa, a buttload of refactoring is needed here. 2011-11-02
 localQueryCold  :: LocalState st -> Tagged ByteString -> IO ByteString
 localQueryCold acidState event
-    = do mvar <- newEmptyMVar
-         withCoreState (localCore acidState) $ \st ->
-           do let (result, _st) = runState coldMethod st
-              -- Make sure that we do not return the result before the event log has
-              -- been flushed to disk.
-              pushAction (localEvents acidState) $
-                putMVar mvar result
-         takeMVar mvar
+    = do st <- readIORef (localCopy acidState)
+         let (result, _st) = runState coldMethod st
+         return result
     where coldMethod = lookupColdMethod (localCore acidState) event
 
 -- | Take a snapshot of the state and save it to disk. Creating checkpoints
@@ -205,7 +199,11 @@ openLocalStateFrom directory initialState
          events <- readEntriesFrom eventsLog n
          mapM_ (runColdMethod core) events
          checkpointsLog <- openFileLog checkpointsLogKey
+         stateCopy <- newIORef undefined
+         withCoreState core (writeIORef stateCopy)
+
          return $ toAcidState LocalState { localCore = core
+                                         , localCopy = stateCopy
                                          , localEvents = eventsLog
                                          , localCheckpoints = checkpointsLog
                                          }
@@ -226,7 +224,7 @@ closeLocalState acidState
 --   folder in the state directory. This folder can then be backed up or thrown out as you see fit.
 --   Reverting to a state before the last checkpoint will not be possible if the 'Archive' folder
 --   has been thrown out.
--- 
+--
 --   This method is idempotent and does not block the normal operation of the AcidState.
 createArchive :: AcidState st -> IO ()
 createArchive abstract_state

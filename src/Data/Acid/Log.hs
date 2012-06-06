@@ -109,8 +109,6 @@ fileWriter currentState queue
       do (entries, actions) <- atomically $ do (entries, actions) <- readTVar queue
                                                when (null entries && null actions) retry
                                                writeTVar queue ([], [])
-                                               -- We don't actually have to reverse the actions
-                                               -- but I don't think it hurts performance much.
                                                return (reverse entries, reverse actions)
          withMVar currentState $ \fd ->
            do let arch = Archive.packEntries entries
@@ -210,8 +208,8 @@ rollbackWhile identifier filterFn
                       new_size = orig_size - skip_size
                   if new_size == 0
                      then do removeFile path; loop xs
-                     else do pathHandle <- openFile path WriteMode 
-                             hSetFileSize pathHandle (fromIntegral new_size) 
+                     else do pathHandle <- openFile path WriteMode
+                             hSetFileSize pathHandle (fromIntegral new_size)
                              hClose pathHandle
        loop (reverse sorted)
 
