@@ -280,14 +280,14 @@ newestEntry identifier
     = do logFiles <- findLogFiles identifier
          let sorted = reverse $ sort logFiles
              (_eventIds, files) = unzip sorted
-         archives <- mapM Lazy.readFile files
-         return $ worker archives
-    where worker [] = Nothing
-          worker (archive:archives)
-              = case Archive.readEntries archive of
-                  Done            -> worker archives
-                  Next entry next -> Just (decode' (lastEntry entry next))
-                  Fail msg        -> error msg
+         worker files
+    where worker [] = return Nothing
+          worker (logFile:logFiles)
+              = do archive <- Lazy.readFile logFile
+                   case Archive.readEntries archive of
+                     Done            -> worker logFiles
+                     Next entry next -> return $ Just (decode' (lastEntry entry next))
+                     Fail msg        -> error msg
           lastEntry entry Done   = entry
           lastEntry entry (Fail msg) = error msg
           lastEntry _ (Next entry next) = lastEntry entry next
