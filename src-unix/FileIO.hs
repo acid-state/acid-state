@@ -10,7 +10,7 @@ import System.Posix(Fd(Fd),
                    )
 import Data.Word(Word8,Word32)
 import Foreign(Ptr)
-import Foreign.C(CInt)
+import Foreign.C(CInt(..))
 
 data FHandle = FHandle Fd
 
