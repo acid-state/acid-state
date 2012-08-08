@@ -10,6 +10,7 @@ module Data.Acid.Log
     , closeFileLog
     , pushEntry
     , pushAction
+    , ensureLeastEntryId
     , readEntriesFrom
     , rollbackTo
     , rollbackWhile
@@ -152,6 +153,14 @@ readEntities path
               = entry : worker next
           worker (Fail msg) = error msg
 
+ensureLeastEntryId :: FileLog object -> EntryId -> IO ()
+ensureLeastEntryId fLog youngestEntry = do
+  atomically $ do
+    entryId <- readTVar (logNextEntryId fLog)
+    writeTVar (logNextEntryId fLog) (max entryId youngestEntry)
+  cutFileLog fLog
+  return ()
+
 -- Read all durable entries younger than the given EntryId.
 -- Note that entries written during or after this call won't
 -- be included in the returned list.
@@ -232,7 +241,7 @@ filterLogFiles minEntryIdMb maxEntryIdMb logFiles
           | otherwise                       -- If 'left' starts after our maxEntryId then we're done.
           = []
         ltMinEntryId = case minEntryIdMb of Nothing         -> const False
-                                            Just minEntryId -> (< minEntryId)
+                                            Just minEntryId -> (<= minEntryId)
         ltMaxEntryId = case maxEntryIdMb of Nothing         -> const True
                                             Just maxEntryId -> (< maxEntryId)
         rangeStart (firstEntryId, _path) = firstEntryId

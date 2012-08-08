@@ -198,6 +198,7 @@ openLocalStateFrom directory initialState
          eventsLog <- openFileLog eventsLogKey
          events <- readEntriesFrom eventsLog n
          mapM_ (runColdMethod core) events
+         ensureLeastEntryId eventsLog n
          checkpointsLog <- openFileLog checkpointsLogKey
          stateCopy <- newIORef undefined
          withCoreState core (writeIORef stateCopy)
