@@ -39,6 +39,8 @@ import Data.Typeable                  ( Typeable, typeOf )
 import Data.IORef
 import System.FilePath                ( (</>) )
 
+import FileIO                         ( obtainPrefixLock, releasePrefixLock, PrefixLock )
+
 
 {-| State container offering full ACID (Atomicity, Consistency, Isolation and Durability)
     guarantees.
@@ -58,6 +60,7 @@ data LocalState st
                  , localCopy        :: IORef st
                  , localEvents      :: FileLog (Tagged ByteString)
                  , localCheckpoints :: FileLog Checkpoint
+                 , localLock        :: PrefixLock
                  } deriving (Typeable)
 
 
@@ -180,7 +183,8 @@ openLocalStateFrom :: (IsAcidic st)
                                          --   found.
                   -> IO (AcidState st)
 openLocalStateFrom directory initialState
-    = do core <- mkCore (eventsToMethods acidEvents) initialState
+    = do lock <- obtainPrefixLock (directory </> "open")
+         core <- mkCore (eventsToMethods acidEvents) initialState
          let eventsLogKey = LogKey { logDirectory = directory
                                    , logPrefix = "events" }
              checkpointsLogKey = LogKey { logDirectory = directory
@@ -207,6 +211,7 @@ openLocalStateFrom directory initialState
                                          , localCopy = stateCopy
                                          , localEvents = eventsLog
                                          , localCheckpoints = checkpointsLog
+                                         , localLock = lock
                                          }
 
 checkpointRestoreError msg
@@ -219,6 +224,7 @@ closeLocalState acidState
     = do closeCore (localCore acidState)
          closeFileLog (localEvents acidState)
          closeFileLog (localCheckpoints acidState)
+         releasePrefixLock (localLock acidState)
 
 
 -- | Move all log files that are no longer necessary for state restoration into the 'Archive'

@@ -63,7 +63,7 @@ Library
   -- Packages needed in order to build this package.
   -- We need hGetSome from bytestring, added in 0.9.1.8
   Build-depends:       base >= 4 && < 5, cereal >= 0.3.2.0, safecopy >= 0.6,
-                       bytestring >= 0.9.1.8, stm,
+                       bytestring >= 0.9.1.8, stm, extensible-exceptions,
                        filepath, directory, mtl, array, containers, template-haskell, network
 
   if os(windows)
