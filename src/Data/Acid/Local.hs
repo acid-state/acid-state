@@ -148,6 +148,7 @@ createCheckpointAndClose abstract_state
          takeMVar mvar
          closeFileLog (localEvents acidState)
          closeFileLog (localCheckpoints acidState)
+         releasePrefixLock (localLock acidState)
   where acidState = downcast abstract_state
 
 
