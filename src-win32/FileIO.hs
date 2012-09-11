@@ -11,6 +11,9 @@ import System.Win32(HANDLE,
 import Data.Word(Word8,Word32)
 import Foreign(Ptr)
 import System.IO
+import System.Directory(createDirectoryIfMissing,removeFile)
+import Control.Exception.Extensible(try,throw)
+import Control.Exception(SomeException)
 
 type PrefixLock = (FilePath, Handle)
 
