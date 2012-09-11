@@ -129,9 +129,10 @@ openRemoteState host port
            closedError False = return ()
            closedError True  = throwIO $ ErrorCall "The AcidState has been closed"
 
-           shutdown = do writeIORef isClosed True
+       tid <- forkIO (listener (runGetPartial get Strict.empty))
+       let shutdown = do writeIORef isClosed True
+                         killThread tid
                          hClose handle
-       forkIO (listener (runGetPartial get Strict.empty))
        return (toAcidState $ RemoteState actor shutdown)
 
 remoteQuery :: QueryEvent event => RemoteState (EventState event) -> event -> IO (EventResult event)
