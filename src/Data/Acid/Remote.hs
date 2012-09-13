@@ -29,6 +29,7 @@ import Control.Concurrent
 import Data.IORef                                    ( newIORef, readIORef, writeIORef )
 import Data.Serialize
 import Data.SafeCopy                                 ( SafeCopy, safeGet, safePut )
+import System.Directory                              ( removeFile )
 import System.IO                                     ( Handle, hFlush, hClose )
 import qualified Data.Sequence as Seq
 import Data.Typeable                                 ( Typeable )
@@ -41,7 +42,10 @@ acidServer acidState port
   = do socket <- listenOn port
        forever (do (handle, _host, _port) <- accept socket
                    forkIO (process acidState handle))
-         `finally` sClose socket
+         `finally` do sClose socket
+                      case port of
+                        UnixSocket path -> removeFile path
+                        _               -> return ()
 
 data Command = RunQuery (Tagged Lazy.ByteString)
              | RunUpdate (Tagged Lazy.ByteString)
