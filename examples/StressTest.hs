@@ -2,7 +2,7 @@
 module Main (main) where
 
 import Data.Acid
-import Data.Acid.Advanced (scheduleUpdate)
+import Data.Acid.Advanced (groupUpdates)
 
 import Control.Monad.State
 import Control.Monad.Reader
@@ -51,8 +51,7 @@ main = do args <- getArgs
             ["poke"]
               -> do putStr "Issuing 100k transactions... "
                     hFlush stdout
-                    replicateM_ (100000-1) (scheduleUpdate acid PokeState)
-                    update acid PokeState
+                    groupUpdates acid (replicate 100000 PokeState)
                     putStrLn "Done"
             ["clear"]
               -> do update acid ClearState

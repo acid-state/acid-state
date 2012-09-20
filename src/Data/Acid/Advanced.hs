@@ -11,6 +11,7 @@
 -}
 module Data.Acid.Advanced
     ( scheduleUpdate
+    , groupUpdates
     , update'
     , query'
     , Method(..)

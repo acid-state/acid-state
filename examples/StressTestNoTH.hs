@@ -49,8 +49,7 @@ main = do args <- getArgs
             ["poke"]
               -> do putStr "Issuing 100k transactions... "
                     hFlush stdout
-                    replicateM_ (100000-1) (scheduleUpdate acid PokeState)
-                    update acid PokeState
+                    groupUpdates acid (replicate 100000 PokeState)
                     putStrLn "Done"
             _ -> do putStrLn $ "Commands:"
                     putStrLn $ "  query            Prints out the current state."

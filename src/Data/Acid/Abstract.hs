@@ -2,6 +2,7 @@
 module Data.Acid.Abstract
     ( AcidState(..)
     , scheduleUpdate
+    , groupUpdates
     , update
     , update'
     , query
@@ -15,6 +16,7 @@ import Data.Acid.Core
 
 import Control.Concurrent      ( MVar, takeMVar )
 import Data.ByteString.Lazy    ( ByteString )
+import Control.Monad           ( void )
 import Control.Monad.Trans     ( MonadIO(liftIO) )
 import Data.Typeable           ( Typeable1, gcast1, typeOf1 )
 
@@ -68,6 +70,17 @@ data AcidState st
 --   @
 scheduleUpdate :: UpdateEvent event => AcidState (EventState event) -> event -> IO (MVar (EventResult event))
 scheduleUpdate = _scheduleUpdate -- Redirection to make Haddock happy.
+
+-- | Schedule multiple Update events and wait for them to be durable, but
+--   throw away their results. This is useful for importing existing
+--   datasets into an AcidState.
+groupUpdates :: UpdateEvent event => AcidState (EventState event) -> [event] -> IO ()
+groupUpdates acidState events
+  = go events
+  where
+    go []     = return ()
+    go [x]    = void $ update acidState x
+    go (x:xs) = scheduleUpdate acidState x >> go xs
 
 -- | Issue an Update event and wait for its result. Once this call returns, you are
 --   guaranteed that the changes to the state are durable. Events may be issued in
