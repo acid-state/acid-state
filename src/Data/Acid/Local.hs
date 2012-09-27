@@ -249,42 +249,50 @@ resumeLocalStateFrom :: (IsAcidic st)
                                          --   found.
                   -> Bool                -- ^ True if we should wait for the lock to be released.
                   -> IO (IO (AcidState st))
-resumeLocalStateFrom directory initialState doWaitForLock = do
-  firstLock <- if not doWaitForLock then obtainPrefixLock lockFile else return undefined
-
-  core <- mkCore (eventsToMethods acidEvents) initialState
-  mbLastCheckpoint <- Log.newestEntry checkpointsLogKey
-  n <- case mbLastCheckpoint of
-         Nothing
-          -> return 0
-         Just (Checkpoint eventCutOff content)
-          -> do modifyCoreState_ core (\_oldState -> case runGetLazy safeGet content of
-                                                       Left msg  -> checkpointRestoreError msg
-                                                       Right val -> return val)
-                return eventCutOff
-  return $ do
-    secondLock <- if doWaitForLock then waitForLock lockFile else return undefined
-
-    eventsLog <- openFileLog eventsLogKey
-    events <- readEntriesFrom eventsLog n
-    mapM_ (runColdMethod core) events
-    ensureLeastEntryId eventsLog n
-    checkpointsLog <- openFileLog checkpointsLogKey
-    stateCopy <- newIORef undefined
-    withCoreState core (writeIORef stateCopy)
-
-    return $ toAcidState LocalState { localCore = core
-                                    , localCopy = stateCopy
-                                    , localEvents = eventsLog
-                                    , localCheckpoints = checkpointsLog
-                                    , localLock = if doWaitForLock then secondLock else firstLock
-                                    }
+resumeLocalStateFrom directory initialState doWaitForLock =
+  case doWaitForLock of
+    True -> do
+      (n, st) <- loadCheckpoint
+      return $ do
+        lock    <- waitForLock lockFile
+        replayEvents lock n st
+    False -> do
+      lock    <- obtainPrefixLock lockFile
+      (n, st) <- loadCheckpoint
+      return $ do
+        replayEvents lock n st
   where
     lockFile = directory </> "open"
     eventsLogKey = LogKey { logDirectory = directory
                           , logPrefix = "events" }
     checkpointsLogKey = LogKey { logDirectory = directory
                                , logPrefix = "checkpoints" }
+    loadCheckpoint = do
+      mbLastCheckpoint <- Log.newestEntry checkpointsLogKey
+      case mbLastCheckpoint of
+        Nothing ->
+          return (0, initialState)
+        Just (Checkpoint eventCutOff content) -> do
+          case runGetLazy safeGet content of
+            Left msg  -> checkpointRestoreError msg
+            Right val -> return (eventCutOff, val)
+    replayEvents lock n st = do
+      core <- mkCore (eventsToMethods acidEvents) st
+
+      eventsLog <- openFileLog eventsLogKey
+      events <- readEntriesFrom eventsLog n
+      mapM_ (runColdMethod core) events
+      ensureLeastEntryId eventsLog n
+      checkpointsLog <- openFileLog checkpointsLogKey
+      stateCopy <- newIORef undefined
+      withCoreState core (writeIORef stateCopy)
+
+      return $ toAcidState LocalState { localCore = core
+                                      , localCopy = stateCopy
+                                      , localEvents = eventsLog
+                                      , localCheckpoints = checkpointsLog
+                                      , localLock = lock
+                                      }
 
 waitForLock :: FilePath -> IO PrefixLock
 waitForLock path = go undefined
