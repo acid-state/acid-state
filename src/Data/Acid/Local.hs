@@ -15,6 +15,8 @@
 module Data.Acid.Local
     ( openLocalState
     , openLocalStateFrom
+    , continueLocalState
+    , continueLocalStateFrom
     , createArchive
     , createCheckpointAndClose
     ) where
@@ -24,8 +26,8 @@ import Data.Acid.Core
 import Data.Acid.Common
 import Data.Acid.Abstract
 
-import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar )
---import Control.Exception              ( evaluate )
+import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar, threadDelay )
+import Control.Exception              ( SomeException, handle )
 import Control.Monad.State            ( runState )
 import Control.Applicative            ( (<$>), (<*>) )
 import Data.ByteString.Lazy           ( ByteString )
@@ -173,6 +175,17 @@ openLocalState :: (Typeable st, IsAcidic st)
 openLocalState initialState
     = openLocalStateFrom ("state" </> show (typeOf initialState)) initialState
 
+-- | Create an AcidState given an initial value.
+--
+--   This will create or resume a log found in the \"state\/[typeOf state]\/\" directory.
+--   If another application has already opened the AcidState, this call will block until it has been closed.
+continueLocalState :: (Typeable st, IsAcidic st)
+              => st                          -- ^ Initial state value. This value is only used if no checkpoint is
+                                             --   found.
+              -> IO (AcidState st)
+continueLocalState initialState
+    = continueLocalStateFrom ("state" </> show (typeOf initialState)) initialState
+
 -- | Create an AcidState given a log directory and an initial value.
 --
 --   This will create or resume a log found in @directory@.
@@ -183,37 +196,71 @@ openLocalStateFrom :: (IsAcidic st)
                   -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
                                          --   found.
                   -> IO (AcidState st)
-openLocalStateFrom directory initialState
-    = do lock <- obtainPrefixLock (directory </> "open")
-         core <- mkCore (eventsToMethods acidEvents) initialState
-         let eventsLogKey = LogKey { logDirectory = directory
-                                   , logPrefix = "events" }
-             checkpointsLogKey = LogKey { logDirectory = directory
-                                        , logPrefix = "checkpoints" }
-         mbLastCheckpoint <- Log.newestEntry checkpointsLogKey
-         n <- case mbLastCheckpoint of
-                Nothing
-                  -> return 0
-                Just (Checkpoint eventCutOff content)
-                  -> do modifyCoreState_ core (\_oldState -> case runGetLazy safeGet content of
-                                                               Left msg  -> checkpointRestoreError msg
-                                                               Right val -> return val)
-                        return eventCutOff
+openLocalStateFrom directory initialState =
+  resumeLocalStateFrom directory initialState False
 
-         eventsLog <- openFileLog eventsLogKey
-         events <- readEntriesFrom eventsLog n
-         mapM_ (runColdMethod core) events
-         ensureLeastEntryId eventsLog n
-         checkpointsLog <- openFileLog checkpointsLogKey
-         stateCopy <- newIORef undefined
-         withCoreState core (writeIORef stateCopy)
+-- | Create an AcidState given a log directory and an initial value.
+--
+--   This will create or resume a log found in @directory@.
+--   If another application has already opened the AcidState, this call will block until it has been closed.
+continueLocalStateFrom :: (IsAcidic st)
+                  => FilePath            -- ^ Location of the checkpoint and transaction files.
+                  -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
+                                         --   found.
+                  -> IO (AcidState st)
+continueLocalStateFrom directory initialState =
+  resumeLocalStateFrom directory initialState True
 
-         return $ toAcidState LocalState { localCore = core
-                                         , localCopy = stateCopy
-                                         , localEvents = eventsLog
-                                         , localCheckpoints = checkpointsLog
-                                         , localLock = lock
-                                         }
+
+resumeLocalStateFrom :: (IsAcidic st)
+                  => FilePath            -- ^ Location of the checkpoint and transaction files.
+                  -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
+                                         --   found.
+                  -> Bool                -- ^ True if we should wait for the lock to be released.
+                  -> IO (AcidState st)
+resumeLocalStateFrom directory initialState doWaitForLock = do
+  firstLock <- if not doWaitForLock then obtainPrefixLock lockFile else return undefined
+
+  core <- mkCore (eventsToMethods acidEvents) initialState
+  mbLastCheckpoint <- Log.newestEntry checkpointsLogKey
+  n <- case mbLastCheckpoint of
+         Nothing
+          -> return 0
+         Just (Checkpoint eventCutOff content)
+          -> do modifyCoreState_ core (\_oldState -> case runGetLazy safeGet content of
+                                                       Left msg  -> checkpointRestoreError msg
+                                                       Right val -> return val)
+                return eventCutOff
+
+  secondLock <- if doWaitForLock then waitForLock lockFile else return undefined
+
+  eventsLog <- openFileLog eventsLogKey
+  events <- readEntriesFrom eventsLog n
+  mapM_ (runColdMethod core) events
+  ensureLeastEntryId eventsLog n
+  checkpointsLog <- openFileLog checkpointsLogKey
+  stateCopy <- newIORef undefined
+  withCoreState core (writeIORef stateCopy)
+
+  return $ toAcidState LocalState { localCore = core
+                                  , localCopy = stateCopy
+                                  , localEvents = eventsLog
+                                  , localCheckpoints = checkpointsLog
+                                  , localLock = if doWaitForLock then secondLock else firstLock
+                                  }
+  where
+    lockFile = directory </> "open"
+    eventsLogKey = LogKey { logDirectory = directory
+                          , logPrefix = "events" }
+    checkpointsLogKey = LogKey { logDirectory = directory
+                               , logPrefix = "checkpoints" }
+
+waitForLock :: FilePath -> IO PrefixLock
+waitForLock path = go undefined
+  where
+    go :: SomeException -> IO PrefixLock
+    go _ = handle (\e -> threadDelay delay >> go e) (obtainPrefixLock path)
+    delay = 10^6
 
 checkpointRestoreError msg
     = error $ "Could not parse saved checkpoint due to the following error: " ++ msg
