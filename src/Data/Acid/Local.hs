@@ -17,6 +17,8 @@ module Data.Acid.Local
     , openLocalStateFrom
     , continueLocalState
     , continueLocalStateFrom
+    , prepareLocalState
+    , prepareLocalStateFrom
     , createArchive
     , createCheckpointAndClose
     ) where
@@ -29,6 +31,7 @@ import Data.Acid.Abstract
 import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar, threadDelay )
 import Control.Exception              ( SomeException, handle )
 import Control.Monad.State            ( runState )
+import Control.Monad                  ( join )
 import Control.Applicative            ( (<$>), (<*>) )
 import Data.ByteString.Lazy           ( ByteString )
 --import qualified Data.ByteString.Lazy as Lazy ( length )
@@ -172,19 +175,32 @@ openLocalState :: (Typeable st, IsAcidic st)
               => st                          -- ^ Initial state value. This value is only used if no checkpoint is
                                              --   found.
               -> IO (AcidState st)
-openLocalState initialState
-    = openLocalStateFrom ("state" </> show (typeOf initialState)) initialState
+openLocalState initialState =
+  openLocalStateFrom ("state" </> show (typeOf initialState)) initialState
 
 -- | Create an AcidState given an initial value.
 --
 --   This will create or resume a log found in the \"state\/[typeOf state]\/\" directory.
 --   If another application has already opened the AcidState, this call will block until it has been closed.
 continueLocalState :: (Typeable st, IsAcidic st)
-              => st                          -- ^ Initial state value. This value is only used if no checkpoint is
-                                             --   found.
-              -> IO (AcidState st)
-continueLocalState initialState
-    = continueLocalStateFrom ("state" </> show (typeOf initialState)) initialState
+                   => st                          -- ^ Initial state value. This value is only used if no checkpoint is
+                                                  --   found.
+                   -> IO (AcidState st)
+continueLocalState initialState =
+  continueLocalStateFrom ("state" </> show (typeOf initialState)) initialState
+
+-- | Create an AcidState given an initial value.
+--
+--   This will create or resume a log found in the \"state\/[typeOf state]\/\" directory.
+--   The most recent checkpoint will be loaded immediately but the AcidState will not be opened
+--   until the returned function is executed.
+prepareLocalState :: (Typeable st, IsAcidic st)
+                  => st                          -- ^ Initial state value. This value is only used if no checkpoint is
+                                                 --   found.
+                  -> IO (IO (AcidState st))
+prepareLocalState initialState =
+  prepareLocalStateFrom ("state" </> show (typeOf initialState)) initialState
+
 
 -- | Create an AcidState given a log directory and an initial value.
 --
@@ -197,7 +213,7 @@ openLocalStateFrom :: (IsAcidic st)
                                          --   found.
                   -> IO (AcidState st)
 openLocalStateFrom directory initialState =
-  resumeLocalStateFrom directory initialState False
+  join $ resumeLocalStateFrom directory initialState False
 
 -- | Create an AcidState given a log directory and an initial value.
 --
@@ -209,7 +225,22 @@ continueLocalStateFrom :: (IsAcidic st)
                                          --   found.
                   -> IO (AcidState st)
 continueLocalStateFrom directory initialState =
+  join $ resumeLocalStateFrom directory initialState True
+
+
+-- | Create an AcidState given an initial value.
+--
+--   This will create or resume a log found in @directory@.
+--   The most recent checkpoint will be loaded immediately but the AcidState will not be opened
+--   until the returned function is executed.
+prepareLocalStateFrom :: (IsAcidic st)
+                  => FilePath            -- ^ Location of the checkpoint and transaction files.
+                  -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
+                                         --   found.
+                  -> IO (IO (AcidState st))
+prepareLocalStateFrom directory initialState =
   resumeLocalStateFrom directory initialState True
+
 
 
 resumeLocalStateFrom :: (IsAcidic st)
@@ -217,7 +248,7 @@ resumeLocalStateFrom :: (IsAcidic st)
                   -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
                                          --   found.
                   -> Bool                -- ^ True if we should wait for the lock to be released.
-                  -> IO (AcidState st)
+                  -> IO (IO (AcidState st))
 resumeLocalStateFrom directory initialState doWaitForLock = do
   firstLock <- if not doWaitForLock then obtainPrefixLock lockFile else return undefined
 
@@ -231,23 +262,23 @@ resumeLocalStateFrom directory initialState doWaitForLock = do
                                                        Left msg  -> checkpointRestoreError msg
                                                        Right val -> return val)
                 return eventCutOff
+  return $ do
+    secondLock <- if doWaitForLock then waitForLock lockFile else return undefined
 
-  secondLock <- if doWaitForLock then waitForLock lockFile else return undefined
+    eventsLog <- openFileLog eventsLogKey
+    events <- readEntriesFrom eventsLog n
+    mapM_ (runColdMethod core) events
+    ensureLeastEntryId eventsLog n
+    checkpointsLog <- openFileLog checkpointsLogKey
+    stateCopy <- newIORef undefined
+    withCoreState core (writeIORef stateCopy)
 
-  eventsLog <- openFileLog eventsLogKey
-  events <- readEntriesFrom eventsLog n
-  mapM_ (runColdMethod core) events
-  ensureLeastEntryId eventsLog n
-  checkpointsLog <- openFileLog checkpointsLogKey
-  stateCopy <- newIORef undefined
-  withCoreState core (writeIORef stateCopy)
-
-  return $ toAcidState LocalState { localCore = core
-                                  , localCopy = stateCopy
-                                  , localEvents = eventsLog
-                                  , localCheckpoints = checkpointsLog
-                                  , localLock = if doWaitForLock then secondLock else firstLock
-                                  }
+    return $ toAcidState LocalState { localCore = core
+                                    , localCopy = stateCopy
+                                    , localEvents = eventsLog
+                                    , localCheckpoints = checkpointsLog
+                                    , localLock = if doWaitForLock then secondLock else firstLock
+                                    }
   where
     lockFile = directory </> "open"
     eventsLogKey = LogKey { logDirectory = directory
