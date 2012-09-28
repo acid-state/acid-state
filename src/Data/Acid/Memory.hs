@@ -7,7 +7,7 @@
 -- Maintainer  :  lemmih@gmail.com
 -- Portability :  non-portable (uses GHC extensions)
 --
--- AcidState container without a transaction log. Mostly used for testing. 
+-- AcidState container without a transaction log. Mostly used for testing.
 --
 
 module Data.Acid.Memory
@@ -22,6 +22,7 @@ import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar )
 import Control.Monad.State            ( runState )
 import Data.ByteString.Lazy           ( ByteString )
 import Data.Typeable                  ( Typeable )
+import Data.IORef                     ( IORef, newIORef, readIORef, writeIORef )
 
 import Data.SafeCopy                  ( SafeCopy(..) )
 
@@ -41,6 +42,7 @@ import Data.SafeCopy                  ( SafeCopy(..) )
 -}
 data MemoryState st
     = MemoryState { localCore    :: Core st
+                  , localCopy    :: IORef st
                   } deriving (Typeable)
 
 -- | Create an AcidState given an initial value.
@@ -49,7 +51,8 @@ openMemoryState :: (IsAcidic st)
               -> IO (AcidState st)
 openMemoryState initialState
     = do core <- mkCore (eventsToMethods acidEvents) initialState
-         return $ toAcidState MemoryState { localCore = core }
+         ref  <- newIORef initialState
+         return $ toAcidState MemoryState { localCore = core, localCopy = ref }
 
 
 -- | Issue an Update event and return immediately. The event is not durable
@@ -67,6 +70,7 @@ scheduleMemoryUpdate acidState event
     = do mvar <- newEmptyMVar
          modifyCoreState_ (localCore acidState) $ \st ->
            do let !(result, !st') = runState hotMethod st
+              writeIORef (localCopy acidState) st'
               putMVar mvar result
               return st'
          return mvar
@@ -77,6 +81,7 @@ scheduleMemoryColdUpdate acidState event
     = do mvar <- newEmptyMVar
          modifyCoreState_ (localCore acidState) $ \st ->
            do let !(result, !st') = runState coldMethod st
+              writeIORef (localCopy acidState) st'
               putMVar mvar result
               return st'
          return mvar
@@ -85,20 +90,16 @@ scheduleMemoryColdUpdate acidState event
 -- | Issue a Query event and wait for its result. Events may be issued in parallel.
 memoryQuery  :: QueryEvent event  => MemoryState (EventState event) -> event -> IO (EventResult event)
 memoryQuery acidState event
-    = do mvar <- newEmptyMVar
-         withCoreState (localCore acidState) $ \st ->
-           do let (result, _st) = runState hotMethod st
-              putMVar mvar result
-         takeMVar mvar
+    = do st <- readIORef (localCopy acidState)
+         let (result, _st) = runState hotMethod st
+         return result
     where hotMethod = lookupHotMethod (coreMethods (localCore acidState)) event
 
 memoryQueryCold  :: MemoryState st -> Tagged ByteString -> IO ByteString
 memoryQueryCold acidState event
-    = do mvar <- newEmptyMVar
-         withCoreState (localCore acidState) $ \st ->
-           do let (result, _st) = runState coldMethod st
-              putMVar mvar result
-         takeMVar mvar
+    = do st <- readIORef (localCopy acidState)
+         let (result, _st) = runState coldMethod st
+         return result
     where coldMethod = lookupColdMethod (localCore acidState) event
 
 -- | This is a nop with the memory backend.
