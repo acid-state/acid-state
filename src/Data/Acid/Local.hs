@@ -26,8 +26,7 @@ import Data.Acid.Core
 import Data.Acid.Common
 import Data.Acid.Abstract
 
-import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar, threadDelay )
-import Control.Exception              ( SomeException, handle )
+import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar )
 import Control.Monad.State            ( runState )
 import Control.Monad                  ( join )
 import Control.Applicative            ( (<$>), (<*>) )

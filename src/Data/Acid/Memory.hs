@@ -18,7 +18,7 @@ import Data.Acid.Core
 import Data.Acid.Common
 import Data.Acid.Abstract
 
-import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar )
+import Control.Concurrent             ( newEmptyMVar, putMVar, MVar )
 import Control.Monad.State            ( runState )
 import Data.ByteString.Lazy           ( ByteString )
 import Data.Typeable                  ( Typeable )
