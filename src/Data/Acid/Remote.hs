@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
 {- |
  Module      :  Data.Acid.Remote
@@ -44,7 +45,9 @@ acidServer acidState port
                    forkIO (process acidState handle))
          `finally` do sClose socket
                       case port of
+#if !defined(mingw32_HOST_OS) && !defined(cygwin32_HOST_OS) && !defined(_WIN32)
                         UnixSocket path -> removeFile path
+#endif
                         _               -> return ()
 
 data Command = RunQuery (Tagged Lazy.ByteString)
