@@ -27,6 +27,7 @@ import Data.Acid.Common
 import Data.Acid.Abstract
 
 import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar )
+import Control.Exception              ( onException )
 import Control.Monad.State            ( runState )
 import Control.Monad                  ( join )
 import Control.Applicative            ( (<$>), (<*>) )
@@ -231,7 +232,7 @@ resumeLocalStateFrom directory initialState delayLocking =
         replayEvents lock n st
     False -> do
       lock    <- obtainPrefixLock lockFile
-      (n, st) <- loadCheckpoint
+      (n, st) <- loadCheckpoint `onException` releasePrefixLock lock
       return $ do
         replayEvents lock n st
   where
