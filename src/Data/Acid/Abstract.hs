@@ -38,12 +38,12 @@ data AnyState st where
                    (both those caused by hardware and software).
 -}
 data AcidState st
-  = AcidState { 
+  = AcidState {
                 _scheduleUpdate :: forall event. (UpdateEvent event, EventState event ~ st) => event -> IO (MVar (EventResult event))
               , scheduleColdUpdate :: Tagged ByteString -> IO (MVar ByteString)
               , _query :: (QueryEvent event, EventState event ~ st)  => event -> IO (EventResult event)
               , queryCold :: Tagged ByteString -> IO ByteString
-              , 
+              ,
 -- | Take a snapshot of the state and save it to disk. Creating checkpoints
 --   makes it faster to resume AcidStates and you're free to create them as
 --   often or seldom as fits your needs. Transactions can run concurrently
@@ -51,7 +51,7 @@ data AcidState st
 --
 --   This call will not return until the operation has succeeded.
                 createCheckpoint :: IO ()
-              , 
+              ,
 -- | Close an AcidState and associated resources.
 --   Any subsequent usage of the AcidState will throw an exception.
                 closeAcidState :: IO ()
@@ -107,10 +107,10 @@ mkAnyState = AnyState
 
 downcast :: Typeable1 sub => AcidState st -> sub st
 downcast AcidState{acidSubState = AnyState sub}
-  = r 
+  = r
  where
    r = case gcast1 (Just sub) of
          Just (Just x) -> x
-         Nothing ->
+         _ ->
            error $
-            "Data.Acid: Invalid subtype cast: " ++ show (typeOf1 sub) ++ " -> " ++ show (typeOf1 r)  
+            "Data.Acid: Invalid subtype cast: " ++ show (typeOf1 sub) ++ " -> " ++ show (typeOf1 r)

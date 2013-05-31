@@ -15,15 +15,19 @@ import Data.Acid.Core
 
 import Control.Monad.State
 import Control.Monad.Reader
+import Data.ByteString.Lazy  ( ByteString )
 import Data.SafeCopy
-import Data.Serialize        (runGet, runGetLazy)
+import Data.Serialize        ( Get, runGet, runGetLazy )
 import Control.Applicative
 import qualified Data.ByteString as Strict
 
 -- Silly fix for bug in cereal-0.3.3.0's version of runGetLazy.
-runGetLazyFix getter inp        
+runGetLazyFix :: Get a
+           -> ByteString
+           -> Either String a
+runGetLazyFix getter inp
   = case runGet getter Strict.empty of
-      Left msg  -> runGetLazy getter inp
+      Left _msg  -> runGetLazy getter inp
       Right val -> Right val
 
 class (SafeCopy st) => IsAcidic st where
