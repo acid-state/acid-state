@@ -92,6 +92,7 @@ module Data.Acid.Remote
     , processRemoteState
     ) where
 
+import Prelude                                hiding ( catch )
 import Control.Concurrent.STM                        ( atomically )
 import Control.Concurrent.STM.TMVar                  ( newEmptyTMVar, readTMVar, takeTMVar, tryTakeTMVar, putTMVar )
 import Control.Concurrent.STM.TQueue
