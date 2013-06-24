@@ -172,8 +172,8 @@ skipAuthenticationCheck :: CommChannel -> IO Bool
 skipAuthenticationCheck _ = return True
 
 {- | skip client-side authentication entirely. -}
-skipAuthenticationPerform :: CommChannel -> IO Bool
-skipAuthenticationPerform _ = return True
+skipAuthenticationPerform :: CommChannel -> IO ()
+skipAuthenticationPerform _ = return ()
 
 {- | check that the client knows a shared secret.
 
