@@ -1,3 +1,4 @@
+{-# LANGUAGE DoAndIfThenElse #-}
 {-
 Format:
  |content length| crc16   | content |
@@ -70,7 +71,31 @@ readEntry :: Get Entry
 readEntry
     = do contentLength <- getWord64le
          contentChecksum <-getWord16le
-         content <- getLazyByteString (fromIntegral contentLength)
+         content <- getLazyByteString_fast (fromIntegral contentLength)
          if crc16 content /= contentChecksum
            then fail "Invalid hash"
            else return content
+
+-- | Read a lazy bytestring WITHOUT any copying or concatenation.
+getLazyByteString_fast :: Int -> Get Lazy.ByteString
+getLazyByteString_fast = worker 0 []
+  where
+    worker counter acc n = do
+      rem <- remaining
+      if n > rem then do
+         chunk <- getBytes rem
+         _ <- ensure 1
+         worker (counter + rem) (chunk:acc) (n-rem)
+      else do
+         chunk <- getBytes n
+         return $ Lazy.fromChunks (reverse $ chunk:acc)
+
+
+
+
+
+
+
+
+
+
