@@ -292,7 +292,7 @@ newestEntry identifier
          worker files
     where worker [] = return Nothing
           worker (logFile:logFiles)
-              = do archive <- Lazy.readFile logFile
+              = do archive <- fmap Lazy.fromStrict $ Strict.readFile logFile
                    case Archive.readEntries archive of
                      Done            -> worker logFiles
                      Next entry next -> return $ Just (decode' (lastEntry entry next))
