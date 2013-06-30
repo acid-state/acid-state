@@ -17,8 +17,8 @@ Extra-source-files:
         src-unix/*.hs
 
 Source-repository head
-  type:          darcs
-  location:      http://hub.darcs.net/Lemmih/acid-state
+  type:          git
+  location:      https://github.com/acid-state/acid-state
 
 Library
   Exposed-Modules:     Data.Acid,
