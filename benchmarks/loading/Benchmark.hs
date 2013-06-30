@@ -10,8 +10,8 @@ import qualified System.Random as Random
 
 main :: IO ()
 main = do
-  
-  workingPath <- do 
+
+  workingPath <- do
     workingPath <- FS.getTemporaryDirectory
     rndStr <- replicateM 16 $ Random.randomRIO ('a', 'z')
     return $ workingPath <> "acid-state" <> "benchmarks" <> "loading" <> FS.decodeString rndStr
@@ -22,10 +22,10 @@ main = do
 
   defaultMain =<< sequence
     [
+      prepareBenchmarksGroup workingPath $ 100,
       prepareBenchmarksGroup workingPath $ 200,
-      prepareBenchmarksGroup workingPath $ 400,
-      prepareBenchmarksGroup workingPath $ 600,
-      prepareBenchmarksGroup workingPath $ 800
+      prepareBenchmarksGroup workingPath $ 300,
+      prepareBenchmarksGroup workingPath $ 400
     ]
 
 
@@ -41,10 +41,10 @@ prepareBenchmarksGroup workingPath size = do
 
   FS.createTree logsInstancePath
   FS.createTree checkpointInstancePath
-  
+
   putStrLn "Initializing"
   inst <- initialize checkpointInstancePath size
-  
+
   putStrLn "Copying"
   FS.copy checkpointInstancePath logsInstancePath
   FS.removeFile $ logsInstancePath <> "open.lock"
@@ -55,11 +55,11 @@ prepareBenchmarksGroup workingPath size = do
   putStrLn "Closing"
   Acid.closeAcidState inst
 
-  return $ bgroup (show size) 
+  return $ bgroup (show size)
     [
-      bench "From Logs" $ nfIO $ 
+      bench "From Logs" $ nfIO $
         load logsInstancePath >>= Acid.closeAcidState,
-      bench "From Checkpoint" $ nfIO $ 
+      bench "From Checkpoint" $ nfIO $
         load checkpointInstancePath >>= Acid.closeAcidState
     ]
 
