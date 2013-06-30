@@ -176,7 +176,10 @@ readEntriesFrom fLog youngestEntry
              firstEntryId = case relevant of
                               []                     -> 0
                               ( logFile : _logFiles) -> rangeStart logFile
-         archive <- liftM Lazy.concat $ mapM (fmap Lazy.fromStrict . Strict.readFile . snd) relevant
+         -- XXX: Strict bytestrings are used due to a performance bug in
+         -- cereal-0.3.5.2 and binary-0.7.1.0. The code should revert back
+         -- to lazy bytestrings once the bug has been fixed.
+         archive <- liftM Lazy.fromChunks $ mapM (Strict.readFile . snd) relevant
          let entries = entriesToList $ readEntries archive
          return $ map decode'
                 $ take (entryCap - youngestEntry)             -- Take events under the eventCap.
@@ -285,21 +288,25 @@ cutFileLog fLog
 --                 containing at least one valid entry is found,
 --                 return the last entry in that file.
 newestEntry :: SafeCopy object => LogKey object -> IO (Maybe object)
-newestEntry identifier
-    = do logFiles <- findLogFiles identifier
-         let sorted = reverse $ sort logFiles
-             (_eventIds, files) = unzip sorted
-         worker files
-    where worker [] = return Nothing
-          worker (logFile:logFiles)
-              = do archive <- fmap Lazy.fromStrict $ Strict.readFile logFile
-                   case Archive.readEntries archive of
-                     Done            -> worker logFiles
-                     Next entry next -> return $ Just (decode' (lastEntry entry next))
-                     Fail msg        -> error msg
-          lastEntry entry Done   = entry
-          lastEntry entry (Fail msg) = error msg
-          lastEntry _ (Next entry next) = lastEntry entry next
+newestEntry identifier = do
+  logFiles <- findLogFiles identifier
+  let sorted = reverse $ sort logFiles
+      (_eventIds, files) = unzip sorted
+  worker files
+ where
+  worker [] = return Nothing
+  worker (logFile:logFiles) = do
+    -- XXX: Strict bytestrings are used due to a performance bug in
+    -- cereal-0.3.5.2 and binary-0.7.1.0. The code should revert back
+    -- to lazy bytestrings once the bug has been fixed.
+    archive <- fmap Lazy.fromStrict $ Strict.readFile logFile
+    case Archive.readEntries archive of
+      Done            -> worker logFiles
+      Next entry next -> return $ Just (decode' (lastEntry entry next))
+      Fail msg        -> error msg
+  lastEntry entry Done          = entry
+  lastEntry entry (Fail msg)    = error msg
+  lastEntry _ (Next entry next) = lastEntry entry next
 
 -- Schedule a new log entry. This call does not block
 -- The given IO action runs once the object is durable. The IO action
