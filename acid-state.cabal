@@ -9,7 +9,7 @@ Maintainer:          Lemmih <lemmih@gmail.com>
 -- Copyright:
 Category:            Database
 Build-type:          Simple
-Cabal-version:       >=1.6
+Cabal-version:       >=1.10
 Extra-source-files:
         examples/*.hs
         examples/errors/*.hs
@@ -57,4 +57,49 @@ Library
   else
      Hs-Source-Dirs:   src-unix/
 
+  default-language:    Haskell2010
   GHC-Options:         -fwarn-unused-imports -fwarn-unused-binds
+
+
+
+benchmark loading-benchmark
+  type:
+    exitcode-stdio-1.0
+  hs-source-dirs:
+    benchmarks/loading
+  main-is:
+    Benchmark.hs
+  build-depends:
+    random,
+    directory,
+    system-fileio == 0.3.*,
+    system-filepath,
+    criterion == 0.8.*,
+    mtl,
+    base,
+    acid-state
+  default-language:
+    Haskell2010
+  default-extensions:  
+    PatternGuards
+    GADTs
+    StandaloneDeriving
+    MultiParamTypeClasses
+    ScopedTypeVariables
+    FlexibleInstances
+    TypeFamilies
+    TypeOperators
+    FlexibleContexts
+    NoImplicitPrelude
+    EmptyDataDecls
+    DataKinds
+    NoMonomorphismRestriction
+    RankNTypes
+    ConstraintKinds
+    DefaultSignatures
+    TupleSections
+    TemplateHaskell
+    OverloadedStrings
+    DeriveDataTypeable
+  ghc-options:
+    -O2
