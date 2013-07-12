@@ -38,7 +38,7 @@ Library
                        containers,
                        extensible-exceptions,
                        safecopy >= 0.6,
-                       stm,
+                       stm >= 2.4,
                        directory,
                        filepath,
                        mtl,
