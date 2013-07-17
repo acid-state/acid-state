@@ -86,10 +86,10 @@ openAcidState initialState
     = AcidState { localMethods = mkMethodMap (eventsToMethods acidEvents) 
                 , localState   = initialState }
 
--- | Execute the 'Update' monad in a pure environment
+-- | Execute the 'Update' monad in a pure environment.
 runUpdate :: Update s r -> s -> (r, s)
 runUpdate update = runState $ unUpdate update
 
--- | Execute the 'Query' monad in a pure environment
+-- | Execute the 'Query' monad in a pure environment.
 runQuery :: Query s r -> s -> r
 runQuery query = runReader $ unQuery query
