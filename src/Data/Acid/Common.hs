@@ -53,8 +53,8 @@ instance Applicative (Query st) where
     (<*>) = ap
 
 -- | Run a query in the Update Monad.
-runQuery :: Query st a -> Update st a
-runQuery query
+liftQuery :: Query st a -> Update st a
+liftQuery query
     = do st <- get
          return (runReader (unQuery query) st)
 

@@ -24,14 +24,16 @@ module Data.Acid.Memory.Pure
     , update
     , update_
     , query
+    , liftQuery
+    , runUpdate
     , runQuery
     ) where
 
 import Data.Acid.Core
 import Data.Acid.Common
 
-import Control.Monad.State            ( runState )
-
+import Control.Monad.State
+import Control.Monad.Reader
 
 {-| State container offering full ACID (Atomicity, Consistency, Isolation and Durability)
     guarantees.
@@ -84,3 +86,10 @@ openAcidState initialState
     = AcidState { localMethods = mkMethodMap (eventsToMethods acidEvents) 
                 , localState   = initialState }
 
+-- | Execute the 'Update' monad in a pure environment.
+runUpdate :: Update s r -> s -> (r, s)
+runUpdate update = runState $ unUpdate update
+
+-- | Execute the 'Query' monad in a pure environment.
+runQuery :: Query s r -> s -> r
+runQuery query = runReader $ unQuery query
