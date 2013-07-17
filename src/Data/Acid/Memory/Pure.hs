@@ -24,12 +24,13 @@ module Data.Acid.Memory.Pure
     , update
     , update_
     , query
+    , liftQuery
     , runUpdate
     , runQuery
     ) where
 
 import Data.Acid.Core
-import Data.Acid.Common hiding (runQuery)
+import Data.Acid.Common
 
 import Control.Monad.State
 import Control.Monad.Reader
