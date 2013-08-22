@@ -214,6 +214,10 @@ sharedSecretPerform pw cc =
      using a socket file. To control access, you can set the permissions of
      the parent directory which contains the socket file.
 
+     The message @SerializeError "too few bytes\nFrom:\tdemandInput\n\n"@ is
+     displayed on the standard error channel of the server whenever a
+     client disconnects.
+     
      see also: 'openRemoteState' and 'sharedSecretCheck'.
  -}
 acidServer :: SafeCopy st =>
