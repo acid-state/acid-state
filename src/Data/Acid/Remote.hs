@@ -79,6 +79,7 @@ module Data.Acid.Remote
     -- * Server/Client
       acidServer
     , openRemoteState
+    , createArchive
     -- * Authentication
     , skipAuthenticationCheck
     , skipAuthenticationPerform
@@ -107,6 +108,7 @@ import Control.Concurrent.Chan                       ( newChan, readChan, writeC
 import Data.Acid.Abstract
 import Data.Acid.Core
 import Data.Acid.Common
+import qualified Data.Acid.Local                     as Local ( createArchive )
 import qualified Data.ByteString                     as Strict
 import Data.ByteString.Char8                         ( pack )
 import qualified Data.ByteString.Lazy                as Lazy
@@ -144,7 +146,6 @@ data AcidRemoteException
     | AuthenticationError String
       deriving (Eq, Show, Typeable)
 instance Exception AcidRemoteException
-
 
 -- | create a 'CommChannel' from a 'Handle'. The 'Handle' should be
 -- some two-way communication channel, such as a socket
@@ -217,7 +218,7 @@ sharedSecretPerform pw cc =
      The message @SerializeError "too few bytes\nFrom:\tdemandInput\n\n"@ is
      displayed on the standard error channel of the server whenever a
      client disconnects.
-     
+
      see also: 'openRemoteState' and 'sharedSecretCheck'.
  -}
 acidServer :: SafeCopy st =>
@@ -266,17 +267,20 @@ acidServer checkAuth port acidState
 data Command = RunQuery (Tagged Lazy.ByteString)
              | RunUpdate (Tagged Lazy.ByteString)
              | CreateCheckpoint
+             | CreateArchive
 
 instance Serialize Command where
   put cmd = case cmd of
               RunQuery query   -> do putWord8 0; put query
               RunUpdate update -> do putWord8 1; put update
               CreateCheckpoint ->    putWord8 2
+              CreateArchive    ->    putWord8 3
   get = do tag <- getWord8
            case tag of
              0 -> liftM RunQuery get
              1 -> liftM RunUpdate get
              2 -> return CreateCheckpoint
+             3 -> return CreateArchive
              _ -> error $ "Serialize.get for Command, invalid tag: " ++ show tag
 
 data Response = Result Lazy.ByteString | Acknowledgement | ConnectionError
@@ -320,7 +324,8 @@ process CommChannel{..} acidState
                                    writeChan chan (liftM Result $ takeMVar result)
             CreateCheckpoint -> do createCheckpoint acidState
                                    writeChan chan (return Acknowledgement)
-
+            CreateArchive -> do Local.createArchive acidState
+                                writeChan chan (return Acknowledgement)
 
 data RemoteState st = RemoteState (Command -> IO (MVar Response)) (IO ())
                     deriving (Typeable)
@@ -481,7 +486,6 @@ remoteQueryCold rs@(RemoteState fn _shutdown) event
                                remoteQueryCold rs event
          Acknowledgement    -> error "remoteQueryCold got Acknowledgement. That should never happen."
 
-
 scheduleRemoteUpdate :: UpdateEvent event => RemoteState (EventState event) -> event -> IO (MVar (EventResult event))
 scheduleRemoteUpdate (RemoteState fn _shutdown) event
   = do let encoded = runPutLazy (safePut event)
@@ -519,3 +523,14 @@ toAcidState remote
               , closeAcidState     = closeRemoteState remote
               , acidSubState       = mkAnyState remote
               }
+
+createRemoteArchive :: RemoteState st -> IO ()
+createRemoteArchive (RemoteState fn _shutdown)
+  = do Acknowledgement <- takeMVar =<< fn CreateArchive
+       return ()
+
+createArchive :: AcidState st -> IO ()
+createArchive abstract_state
+  = createRemoteArchive state
+  where state = downcast abstract_state
+
