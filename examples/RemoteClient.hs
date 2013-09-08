@@ -2,9 +2,9 @@
 module Main (main) where
 
 import Control.Monad         ( replicateM_ )
-import Data.Acid             ( AcidState, closeAcidState, createCheckpoint, query, update )
+import Data.Acid             ( AcidState, closeAcidState, createCheckpoint, createArchive, query, update )
 import Data.Acid.Advanced    ( scheduleUpdate )
-import Data.Acid.Remote      ( openRemoteState, sharedSecretPerform, createArchive )
+import Data.Acid.Remote      ( openRemoteState, sharedSecretPerform )
 import Data.ByteString.Char8 ( pack )
 import Network               ( PortID(..) )
 import RemoteCommon          ( StressState(..), ClearState(..), PokeState(..), QueryState(..) )

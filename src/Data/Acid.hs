@@ -12,13 +12,14 @@
  <http://mirror.seize.it/acid-state/examples/>.
 
 -}
- 
+
 module Data.Acid
     ( AcidState
     , openLocalState
     , openLocalStateFrom
     , closeAcidState
     , createCheckpoint
+    , createArchive
     , update
     , query
     , EventResult

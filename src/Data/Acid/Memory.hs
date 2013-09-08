@@ -107,6 +107,11 @@ createMemoryCheckpoint :: SafeCopy st => MemoryState st -> IO ()
 createMemoryCheckpoint acidState
     = return ()
 
+-- | This is a nop with the memory backend.
+createMemoryArchive :: SafeCopy st => MemoryState st -> IO ()
+createMemoryArchive acidState
+    = return ()
+
 -- | Close an AcidState and associated logs.
 --   Any subsequent usage of the AcidState will throw an exception.
 closeMemoryState :: MemoryState st -> IO ()
@@ -120,6 +125,7 @@ toAcidState memory
               , _query             = memoryQuery memory
               , queryCold          = memoryQueryCold memory
               , createCheckpoint   = createMemoryCheckpoint memory
+              , createArchive      = createMemoryArchive memory
               , closeAcidState     = closeMemoryState memory
               , acidSubState       = mkAnyState memory
               }

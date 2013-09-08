@@ -79,7 +79,6 @@ module Data.Acid.Remote
     -- * Server/Client
       acidServer
     , openRemoteState
-    , createArchive
     -- * Authentication
     , skipAuthenticationCheck
     , skipAuthenticationPerform
@@ -108,7 +107,6 @@ import Control.Concurrent.Chan                       ( newChan, readChan, writeC
 import Data.Acid.Abstract
 import Data.Acid.Core
 import Data.Acid.Common
-import qualified Data.Acid.Local                     as Local ( createArchive )
 import qualified Data.ByteString                     as Strict
 import Data.ByteString.Char8                         ( pack )
 import qualified Data.ByteString.Lazy                as Lazy
@@ -324,7 +322,7 @@ process CommChannel{..} acidState
                                    writeChan chan (liftM Result $ takeMVar result)
             CreateCheckpoint -> do createCheckpoint acidState
                                    writeChan chan (return Acknowledgement)
-            CreateArchive -> do Local.createArchive acidState
+            CreateArchive -> do createArchive acidState
                                 writeChan chan (return Acknowledgement)
 
 data RemoteState st = RemoteState (Command -> IO (MVar Response)) (IO ())
@@ -513,6 +511,11 @@ createRemoteCheckpoint (RemoteState fn _shutdown)
   = do Acknowledgement <- takeMVar =<< fn CreateCheckpoint
        return ()
 
+createRemoteArchive :: RemoteState st -> IO ()
+createRemoteArchive (RemoteState fn _shutdown)
+  = do Acknowledgement <- takeMVar =<< fn CreateArchive
+       return ()
+
 toAcidState :: IsAcidic st => RemoteState st -> AcidState st
 toAcidState remote
   = AcidState { _scheduleUpdate    = scheduleRemoteUpdate remote
@@ -520,17 +523,8 @@ toAcidState remote
               , _query             = remoteQuery remote
               , queryCold          = remoteQueryCold remote
               , createCheckpoint   = createRemoteCheckpoint remote
+              , createArchive      = createRemoteArchive remote
               , closeAcidState     = closeRemoteState remote
               , acidSubState       = mkAnyState remote
               }
-
-createRemoteArchive :: RemoteState st -> IO ()
-createRemoteArchive (RemoteState fn _shutdown)
-  = do Acknowledgement <- takeMVar =<< fn CreateArchive
-       return ()
-
-createArchive :: AcidState st -> IO ()
-createArchive abstract_state
-  = createRemoteArchive state
-  where state = downcast abstract_state
 

@@ -51,6 +51,7 @@ data AcidState st
 --
 --   This call will not return until the operation has succeeded.
                 createCheckpoint :: IO ()
+              , createArchive :: IO ()
               ,
 -- | Close an AcidState and associated resources.
 --   Any subsequent usage of the AcidState will throw an exception.

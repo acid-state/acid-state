@@ -17,7 +17,7 @@ module Data.Acid.Local
     , openLocalStateFrom
     , prepareLocalState
     , prepareLocalStateFrom
-    , createArchive
+    , createLocalArchive
     , createCheckpointAndClose
     ) where
 
@@ -287,8 +287,8 @@ closeLocalState acidState
 --   has been thrown out.
 --
 --   This method is idempotent and does not block the normal operation of the AcidState.
-createArchive :: AcidState st -> IO ()
-createArchive abstract_state
+createLocalArchive :: LocalState st -> IO ()
+createLocalArchive state
   = do -- We need to look at the last checkpoint saved to disk. Since checkpoints can be written
        -- in parallel with this call, we can't guarantee that the checkpoint we get really is the
        -- last one but that's alright.
@@ -306,7 +306,6 @@ createArchive abstract_state
                  -- In the same style as above, we archive all log files that came before the log file
                  -- which contains our checkpoint.
                  archiveFileLog (localCheckpoints state) durableCheckpointId
-  where state = downcast abstract_state
 
 toAcidState :: IsAcidic st => LocalState st -> AcidState st
 toAcidState local
@@ -315,6 +314,7 @@ toAcidState local
               , _query = localQuery local
               , queryCold = localQueryCold local
               , createCheckpoint = createLocalCheckpoint local
+              , createArchive = createLocalArchive local
               , closeAcidState = closeLocalState local
               , acidSubState = mkAnyState local
               }
