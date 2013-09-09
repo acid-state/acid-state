@@ -2,7 +2,7 @@
 module Main (main) where
 
 import Control.Monad         ( replicateM_ )
-import Data.Acid             ( AcidState, closeAcidState, createCheckpoint, query, update )
+import Data.Acid             ( AcidState, closeAcidState, createCheckpoint, createArchive, query, update )
 import Data.Acid.Advanced    ( scheduleUpdate )
 import Data.Acid.Remote      ( openRemoteState, sharedSecretPerform )
 import Data.ByteString.Char8 ( pack )
@@ -20,6 +20,7 @@ printHelp
        putStrLn $ "  query            Prints out the current state."
        putStrLn $ "  poke             Spawn 100k transactions."
        putStrLn $ "  checkpoint       Create a new checkpoint."
+       putStrLn $ "  archive          Create archive."
        putStrLn $ "  clear            Clear the state and create a new checkpoint."
        putStrLn $ "  quit             Exit with out creating a checkpoint."
 
@@ -38,6 +39,9 @@ commandLoop acid
         case cmd of
           "checkpoint"
               -> do createCheckpoint acid
+                    go
+          "archive"
+              -> do createArchive acid
                     go
           "query"
               -> do n <- query acid QueryState
