@@ -213,10 +213,6 @@ sharedSecretPerform pw cc =
      using a socket file. To control access, you can set the permissions of
      the parent directory which contains the socket file.
 
-     The message @SerializeError "too few bytes\nFrom:\tdemandInput\n\n"@ is
-     displayed on the standard error channel of the server whenever a
-     client disconnects.
-
      see also: 'openRemoteState' and 'sharedSecretCheck'.
  -}
 acidServer :: SafeCopy st =>
@@ -312,7 +308,10 @@ process CommChannel{..} acidState
           = case inp of
               Fail msg      -> throwIO (SerializeError msg)
               Partial cont  -> do bs <- ccGetSome 1024
-                                  worker chan (cont bs)
+                                  if Strict.null bs then
+                                     return ()
+                                  else
+                                     worker chan (cont bs)
               Done cmd rest -> do processCommand chan cmd; worker chan (runGetPartial get rest)
         processCommand chan cmd =
           case cmd of
