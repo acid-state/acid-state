@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 
 import Benchmark.Prelude
 import Criterion.Main
