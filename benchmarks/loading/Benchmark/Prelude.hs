@@ -21,13 +21,13 @@ module Benchmark.Prelude
   )
   where
 
-import Prelude hiding (concat, foldr, mapM_, sequence_, foldl1, maximum, minimum, product, sum, all, and, any, concatMap, elem, foldl, foldr1, notElem, or, mapM, sequence, FilePath)
+import Prelude ()
 import Control.Monad hiding (mapM_, sequence_, forM_, msum, mapM, sequence, forM)
 import Control.Applicative
 import Control.Arrow 
 import Data.Monoid
-import Data.Foldable
-import Data.Traversable
+import Data.Foldable hiding (mapM_)
+import Data.Traversable hiding (sequence)
 import Data.Maybe
 import Data.List hiding (concat, foldr, foldl1, maximum, minimum, product, sum, all, and, any, concatMap, elem, foldl, foldr1, notElem, or, find, maximumBy, minimumBy, mapAccumL, mapAccumR, foldl')
 import Data.Data

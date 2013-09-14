@@ -9,6 +9,7 @@ module Benchmark.FileSystem
   )
   where
 
+import Prelude hiding (FilePath, last, sequence_)
 import Benchmark.Prelude hiding (stripPrefix, last)
 import Filesystem.Path.CurrentOS
 import Filesystem
