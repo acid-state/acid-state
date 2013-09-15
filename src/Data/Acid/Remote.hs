@@ -78,6 +78,7 @@ module Data.Acid.Remote
     (
     -- * Server/Client
       acidServer
+    , acidServer'
     , openRemoteState
     -- * Authentication
     , skipAuthenticationCheck
@@ -223,6 +224,28 @@ acidServer :: SafeCopy st =>
 acidServer checkAuth port acidState
   = withSocketsDo $
     do listenSocket <- listenOn port
+       (acidServer' checkAuth listenSocket acidState) `finally` (cleanup listenSocket)
+    where
+      cleanup socket =
+          do sClose socket
+             case port of
+#if !defined(mingw32_HOST_OS) && !defined(cygwin32_HOST_OS) && !defined(_WIN32)
+               UnixSocket path -> removeFile path
+#endif
+               _               -> return ()
+
+{- | Works the same way as 'acidServer', but uses pre-binded socket @listenSocket@.
+
+     Can be useful when fine-tuning of socket binding parameters is needed
+     (for example, listening on a particular network interface, IPv4/IPv6 options).
+ -}
+acidServer' :: SafeCopy st =>
+              (CommChannel -> IO Bool) -- ^ check authentication, see 'sharedSecretPerform'
+           -> Socket                   -- ^ binded socket to accept connections from
+           -> AcidState st             -- ^ state to serve
+           -> IO ()
+acidServer' checkAuth listenSocket acidState
+  = do
        let loop = forever $
              do (socket, _sockAddr) <- accept listenSocket
                 let commChannel = socketToCommChannel socket
@@ -231,7 +254,7 @@ acidServer checkAuth port acidState
                                  process commChannel acidState
                             ccClose commChannel -- FIXME: `finally` ?
            infi = loop `catchSome` logError >> infi
-       infi `finally` (cleanup listenSocket)
+       infi
     where
       logError :: (Show e) => e -> IO ()
       logError e = hPrint stderr e
@@ -250,13 +273,6 @@ acidServer checkAuth port acidState
                             then return () -- h (toException e) -- we could log the exception, but there could be thousands of them
                             else throw e
                        ]
-      cleanup socket =
-          do sClose socket
-             case port of
-#if !defined(mingw32_HOST_OS) && !defined(cygwin32_HOST_OS) && !defined(_WIN32)
-               UnixSocket path -> removeFile path
-#endif
-               _               -> return ()
 
 data Command = RunQuery (Tagged Lazy.ByteString)
              | RunUpdate (Tagged Lazy.ByteString)
