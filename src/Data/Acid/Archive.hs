@@ -14,14 +14,14 @@ module Data.Acid.Archive
     , entriesToListNoFail
     ) where
 
-import Data.Acid.CRC
+import           Data.Acid.CRC
 
-import qualified Data.ByteString.Lazy as Lazy
-import qualified Data.ByteString as Strict
-import qualified Data.Serialize.Get as Serialize
-import Data.Serialize.Get hiding (Result(..))
-import Data.Serialize.Builder
-import Data.Monoid
+import qualified Data.ByteString        as Strict
+import qualified Data.ByteString.Lazy   as Lazy
+import           Data.Monoid
+import           Data.Serialize.Builder
+import           Data.Serialize.Get     hiding (Result (..))
+import qualified Data.Serialize.Get     as Serialize
 
 type Entry = Lazy.ByteString
 data Entries = Done | Next Entry Entries | Fail String
@@ -62,7 +62,7 @@ readEntries bs
                   Serialize.Done entry rest
                       | Strict.null rest    -> Next entry (worker more)
                       | otherwise           -> Next entry (worker (rest:more))
-                  Serialize.Fail msg        -> Fail msg
+                  Serialize.Fail msg _      -> Fail msg
                   Serialize.Partial cont    -> case more of
                                                  []     -> check (cont Strict.empty) []
                                                  (x:xs) -> check (cont x) xs
