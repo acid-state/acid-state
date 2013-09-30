@@ -322,7 +322,7 @@ process CommChannel{..} acidState
        worker chan (runGetPartial get Strict.empty)
   where worker chan inp
           = case inp of
-              Fail msg      -> throwIO (SerializeError msg)
+              Fail msg _    -> throwIO (SerializeError msg)
               Partial cont  -> do bs <- ccGetSome 1024
                                   if Strict.null bs then
                                      return ()
@@ -429,7 +429,7 @@ processRemoteState reconnect
                  getResponse leftover =
                      do debugStrLn $ "listener: listening for Response."
                         let go inp = case inp of
-                                   Fail msg       -> error msg
+                                   Fail msg _     -> error msg
                                    Partial cont   -> do debugStrLn $ "listener: ccGetSome"
                                                         bs <- ccGetSome cc 1024
                                                         go (cont bs)
