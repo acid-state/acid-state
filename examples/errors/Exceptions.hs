@@ -1,17 +1,20 @@
-{-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TypeFamilies       #-}
+
 module Main (main) where
 
-import Data.Acid
-import Data.Acid.Local ( createCheckpointAndClose )
+import           Data.Acid
+import           Data.Acid.Local     (createCheckpointAndClose)
 
-import Control.Monad.State
-import System.Environment
-import Data.SafeCopy
+import           Control.Monad.State
+import           Data.SafeCopy
+import           System.Environment
 
-import Data.Typeable
+import           Data.Typeable
 
-import Control.Exception
-import Prelude hiding (catch)
+import           Control.Exception
+import           Prelude             hiding (catch)
 
 ------------------------------------------------------
 -- The Haskell structure that we want to encapsulate

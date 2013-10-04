@@ -1,13 +1,16 @@
-{-# LANGUAGE TypeFamilies, DeriveDataTypeable, TemplateHaskell #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TypeFamilies       #-}
+
 module Main (main) where
 
-import Data.Acid
+import           Data.Acid
 
-import Control.Monad.State                   ( get, put )
-import Control.Monad.Reader                  ( ask )
-import Control.Applicative                   ( (<$>) )
-import System.Environment                    ( getArgs )
-import Data.SafeCopy
+import           Control.Applicative  ((<$>))
+import           Control.Monad.Reader (ask)
+import           Control.Monad.State  (get, put)
+import           Data.SafeCopy
+import           System.Environment   (getArgs)
 
 type Message = String
 data Database = Database [Message]
@@ -15,7 +18,7 @@ data Database = Database [Message]
 $(deriveSafeCopy 0 'base ''Database)
 
 -- Transactions are defined to run in either the 'Update' monad
--- or the 'Query' monad.                                                                                                                                    
+-- or the 'Query' monad.
 addMessage :: Message -> Update Database ()
 addMessage msg
     = do Database messages <- get

@@ -1,13 +1,16 @@
-{-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TypeFamilies       #-}
+
 module Main (main) where
 
-import Data.Acid
+import           Data.Acid
 
-import Control.Monad.State
-import Control.Concurrent
-import Data.Time
-import System.IO
-import Data.SafeCopy
+import           Control.Concurrent
+import           Control.Monad.State
+import           Data.SafeCopy
+import           Data.Time
+import           System.IO
 
 ------------------------------------------------------
 -- The Haskell structure that we want to encapsulate
@@ -25,9 +28,8 @@ $(deriveSafeCopy 0 'base ''SlowCheckpoint)
 -- Computing 'last [0..100000000]' takes roughly 2 seconds
 -- on my machine.       XXX Lemmih, 2011-04-26
 setComputationallyHeavyData :: Update SlowCheckpoint ()
-setComputationallyHeavyData
-    = do SlowCheckpoint _slow tick <- get
-         put $ SlowCheckpoint (last [0..100000000]) tick
+setComputationallyHeavyData = do SlowCheckpoint _slow tick <- get
+                                 put $ SlowCheckpoint (last [0..100000000]) tick
 
 tick :: Update SlowCheckpoint Int
 tick = do SlowCheckpoint slow tick <- get

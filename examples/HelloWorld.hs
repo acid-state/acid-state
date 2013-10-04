@@ -1,14 +1,15 @@
-{-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TypeFamilies       #-}
+
 module Main (main) where
 
-import Data.Acid
-
-import Control.Monad.State
-import Control.Monad.Reader
-import System.Environment
-import Data.SafeCopy
-
-import Data.Typeable
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Data.Acid
+import           Data.SafeCopy
+import           Data.Typeable
+import           System.Environment
 
 ------------------------------------------------------
 -- The Haskell structure that we want to encapsulate
@@ -41,4 +42,4 @@ main = do acid <- openLocalState (HelloWorldState "Hello world")
              then do string <- query acid QueryState
                      putStrLn $ "The state is: " ++ string
              else do update acid (WriteState (unwords args))
-                     putStrLn $ "The state has been modified!"
+                     putStrLn "The state has been modified!"

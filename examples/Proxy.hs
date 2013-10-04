@@ -1,18 +1,21 @@
-{-# LANGUAGE TemplateHaskell, DeriveDataTypeable, TypeFamilies #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TypeFamilies       #-}
+
 module Main (main) where
 
-import Data.Acid
-import Data.Acid.Remote
-import Data.Acid.Advanced   ( scheduleUpdate )
+import           Data.Acid
+import           Data.Acid.Advanced   (scheduleUpdate)
+import           Data.Acid.Remote
 
-import Control.Monad.State
-import Control.Monad.Reader
-import System.Environment
-import System.IO
-import Network
-import Data.SafeCopy
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Data.SafeCopy
+import           Network
+import           System.Environment
+import           System.IO
 
-import Data.Typeable
+import           Data.Typeable
 
 ------------------------------------------------------
 -- The Haskell structure that we want to encapsulate
@@ -42,17 +45,17 @@ openLocal :: IO (AcidState ProxyStressState)
 openLocal = openLocalState (StressState 0)
 
 openRemote :: String -> IO (AcidState ProxyStressState)
-openRemote socket = openRemoteState "localhost" (UnixSocket socket)
+openRemote socket = openRemoteState skipAuthenticationPerform "localhost" (UnixSocket socket)
 
 main :: IO ()
 main = do args <- getArgs
           case args of
             ["server", socket]
               -> do acid <- openLocal
-                    acidServer acid (UnixSocket socket)
-            ["proxy", from, to] 
+                    acidServer skipAuthenticationCheck (UnixSocket socket) acid
+            ["proxy", from, to]
               -> do acid <- openRemote from
-                    acidServer acid (UnixSocket to)
+                    acidServer skipAuthenticationCheck (UnixSocket to) acid
             ["query", socket]
               -> do acid <- openRemote socket
                     n <- query acid QueryState

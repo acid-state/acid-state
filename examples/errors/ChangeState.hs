@@ -1,19 +1,21 @@
-{-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TypeFamilies       #-}
+
 module Main (main) where
 
-import Data.Acid
+import           Data.Acid
 
-import Control.Monad.State
-import System.Environment
-import Data.SafeCopy
+import           Control.Monad.State
+import           Data.SafeCopy
+import           System.Environment
 
-import Data.Typeable
+import           Data.Typeable
 
-import Control.Exception
-import Prelude hiding (catch)
+import           Control.Exception
+import           Prelude             hiding (catch)
 
-import qualified Data.Text as Text
-
+import qualified Data.Text           as Text
 
 ------------------------------------------------------
 -- The Haskell structure that we want to encapsulate
@@ -44,7 +46,6 @@ main = do putStrLn "This example simulates what happens when you modify your sta
           firstAcid <- openLocalStateFrom "state/ChangeState" (FirstState "first state")
           createCheckpoint firstAcid
           closeAcidState firstAcid
-
           secondAcid <- openLocalStateFrom "state/ChangeState" (SecondState (Text.pack "This initial value shouldn't be used"))
           closeAcidState secondAcid
           putStrLn "If you see this message then something has gone wrong!"
