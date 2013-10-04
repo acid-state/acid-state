@@ -1,21 +1,19 @@
-{-# LANGUAGE TemplateHaskell, DeriveDataTypeable, TypeFamilies #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TypeFamilies       #-}
+
 module RemoteCommon where
 
-import Data.Acid
-
-import Control.Monad.State
-import Control.Monad.Reader
-import System.Environment
-import System.IO
-import Data.SafeCopy
-
-import Data.Typeable
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Data.Acid
+import           Data.SafeCopy
+import           Data.Typeable
 
 ------------------------------------------------------
 -- The Haskell structure that we want to encapsulate
 
-data StressState = StressState !Int
-    deriving (Typeable)
+data StressState = StressState !Int deriving (Typeable)
 
 $(deriveSafeCopy 0 'base ''StressState)
 
