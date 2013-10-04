@@ -1,21 +1,24 @@
-{-# LANGUAGE DeriveDataTypeable, TypeFamilies, TemplateHaskell #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TypeFamilies       #-}
+
 module Main (main) where
 
-import Data.Acid
-import Data.Acid.Remote
+import           Data.Acid
+import           Data.Acid.Remote
 
-import Control.Monad.State
-import Control.Monad.Reader
-import Control.Applicative
-import System.Environment
-import System.IO
-import System.Exit
-import Network
-import Data.SafeCopy
+import           Control.Applicative
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Data.SafeCopy
+import           Network
+import           System.Environment
+import           System.Exit
+import           System.IO
 
-import Data.Typeable
+import           Data.Typeable
 
-import qualified Data.Map as Map
+import qualified Data.Map             as Map
 
 ------------------------------------------------------
 -- The Haskell structure that we want to encapsulate

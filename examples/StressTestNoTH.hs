@@ -1,16 +1,19 @@
-{-# LANGUAGE DeriveDataTypeable, TypeFamilies, StandaloneDeriving #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeFamilies       #-}
+
 module Main (main) where
 
-import Data.Acid
-import Data.Acid.Advanced
+import           Data.Acid
+import           Data.Acid.Advanced
 
-import Control.Monad.State
-import Control.Monad.Reader
-import System.Environment
-import System.IO
-import Data.SafeCopy
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Data.SafeCopy
+import           System.Environment
+import           System.IO
 
-import Data.Typeable
+import           Data.Typeable
 
 ------------------------------------------------------
 -- The Haskell structure that we want to encapsulate
@@ -32,7 +35,6 @@ pokeState = do StressState i <- get
 queryState :: Query StressState Int
 queryState = do StressState i <- ask
                 return i
-
 
 ------------------------------------------------------
 -- This is how AcidState is used:
@@ -56,14 +58,12 @@ main = do args <- getArgs
                     putStrLn $ "  poke             Spawn 100k transactions."
                     putStrLn $ "  checkpoint       Create a new checkpoint."
 
-
 ------------------------------------------------------
 -- The gritty details. These things may be done with
 -- Template Haskell in the future.
 
 data PokeState = PokeState
 data QueryState = QueryState
-
 
 deriving instance Typeable PokeState
 instance SafeCopy PokeState where
