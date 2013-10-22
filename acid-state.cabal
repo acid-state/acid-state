@@ -1,5 +1,5 @@
 Name:                acid-state
-Version:             0.12.1
+Version:             0.12.2
 Synopsis:            Add ACID guarantees to any serializable Haskell data structure.
 Description:         Use regular Haskell data structures as your database and get stronger ACID guarantees than most RDBMS offer.
 Homepage:            http://acid-state.seize.it/
@@ -13,6 +13,7 @@ Cabal-version:       >=1.10
 Extra-source-files:
         examples/*.hs
         examples/errors/*.hs
+        examples/ssl/test.*
         src-win32/*.hs
         src-unix/*.hs
 
@@ -24,7 +25,7 @@ Library
   Exposed-Modules:     Data.Acid,
                        Data.Acid.Local, Data.Acid.Memory,
                        Data.Acid.Memory.Pure, Data.Acid.Remote,
-                       Data.Acid.Advanced
+                       Data.Acid.Advanced, Data.Acid.Remote.TLS
 
   Other-modules:       Data.Acid.Log, Data.Acid.Archive,
                        Data.Acid.CRC, Paths_acid_state,
@@ -39,6 +40,7 @@ Library
                        extensible-exceptions,
                        safecopy >= 0.6,
                        stm >= 2.4,
+                       HsOpenSSL,
                        directory,
                        filepath,
                        mtl,
