@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, BangPatterns #-}
+{-# LANGUAGE DeriveDataTypeable, BangPatterns, CPP #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Data.Acid.Local
@@ -141,7 +141,7 @@ createLocalCheckpoint acidState
 -- | Save a snapshot to disk and close the AcidState as a single atomic
 --   action. This is useful when you want to make sure that no events
 --   are saved to disk after a checkpoint.
-createCheckpointAndClose :: SafeCopy st => AcidState st -> IO ()
+createCheckpointAndClose :: (SafeCopy st, Typeable st) => AcidState st -> IO ()
 createCheckpointAndClose abstract_state
     = do mvar <- newEmptyMVar
          closeCore' (localCore acidState) $ \st ->
