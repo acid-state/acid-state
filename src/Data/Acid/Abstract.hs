@@ -18,14 +18,14 @@ import Control.Concurrent      ( MVar, takeMVar )
 import Data.ByteString.Lazy    ( ByteString )
 import Control.Monad           ( void )
 import Control.Monad.Trans     ( MonadIO(liftIO) )
-#if MIN_VERSION_base(4,7,0)
+#if __GLASGOW_HASKELL__ >= 707
 import Data.Typeable           ( Typeable, gcast, typeOf )
 #else
 import Data.Typeable           ( Typeable1, gcast1, typeOf1 )
 #endif
 
 data AnyState st where
-#if MIN_VERSION_base(4,7,0)
+#if __GLASGOW_HASKELL__ >= 707
   AnyState :: Typeable sub_st => sub_st st -> AnyState st
 #else
   AnyState :: Typeable1 sub_st => sub_st st -> AnyState st
@@ -111,14 +111,14 @@ query = _query -- Redirection to make Haddock happy.
 query' :: (QueryEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
 query' acidState event = liftIO (query acidState event)
 
-#if MIN_VERSION_base(4,7,0)
+#if __GLASGOW_HASKELL__ >= 707
 mkAnyState :: Typeable sub_st => sub_st st -> AnyState st
 #else
 mkAnyState :: Typeable1 sub_st => sub_st st -> AnyState st
 #endif
 mkAnyState = AnyState
 
-#if MIN_VERSION_base(4,7,0)
+#if __GLASGOW_HASKELL__ >= 707
 downcast :: (Typeable sub, Typeable st) => AcidState st -> sub st
 downcast AcidState{acidSubState = AnyState sub}
   = r

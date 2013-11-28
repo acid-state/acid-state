@@ -257,7 +257,7 @@ makeMethodInstance eventName eventType
              structType = foldl appT (conT eventStructName) [ varT tyvar | PlainTV tyvar <- tyvars ]
          instanceD (cxt $ [ classP classPred [varT tyvar] | PlainTV tyvar <- tyvars, classPred <- preds ] ++ map return context)
                    (return ty)
-#if MIN_VERSION_template_haskell(2,9,0)
+#if __GLASGOW_HASKELL__ >= 707
                    [ tySynInstD ''MethodResult (tySynEqn [structType] (return resultType))
                    , tySynInstD ''MethodState  (tySynEqn [structType] (return stateType))
 #else
