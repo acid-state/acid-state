@@ -209,7 +209,9 @@ makeEventHandler eventName eventType
 --  deriving (Typeable)
 makeEventDataType eventName eventType
     = do let con = normalC eventStructName [ strictType notStrict (return arg) | arg <- args ]
-         dataD (return []) eventStructName tyvars [con] [''Typeable]
+         case args of
+          [_] -> newtypeD (return []) eventStructName tyvars con [''Typeable]
+          _   -> dataD (return []) eventStructName tyvars [con] [''Typeable]
     where (tyvars, _cxt, args, _stateType, _resultType, _isUpdate) = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
