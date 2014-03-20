@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, TypeFamilies, GADTs #-}
+{-# LANGUAGE RankNTypes, TypeFamilies, GADTs, CPP #-}
 module Data.Acid.Abstract
     ( AcidState(..)
     , scheduleUpdate
@@ -18,10 +18,18 @@ import Control.Concurrent      ( MVar, takeMVar )
 import Data.ByteString.Lazy    ( ByteString )
 import Control.Monad           ( void )
 import Control.Monad.Trans     ( MonadIO(liftIO) )
+#if __GLASGOW_HASKELL__ >= 707
+import Data.Typeable           ( Typeable, gcast, typeOf )
+#else
 import Data.Typeable           ( Typeable1, gcast1, typeOf1 )
+#endif
 
 data AnyState st where
+#if __GLASGOW_HASKELL__ >= 707
+  AnyState :: Typeable sub_st => sub_st st -> AnyState st
+#else
   AnyState :: Typeable1 sub_st => sub_st st -> AnyState st
+#endif
 
 -- Haddock doesn't get the types right on its own.
 {-| State container offering full ACID (Atomicity, Consistency, Isolation and Durability)
@@ -103,9 +111,24 @@ query = _query -- Redirection to make Haddock happy.
 query' :: (QueryEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
 query' acidState event = liftIO (query acidState event)
 
+#if __GLASGOW_HASKELL__ >= 707
+mkAnyState :: Typeable sub_st => sub_st st -> AnyState st
+#else
 mkAnyState :: Typeable1 sub_st => sub_st st -> AnyState st
+#endif
 mkAnyState = AnyState
 
+#if __GLASGOW_HASKELL__ >= 707
+downcast :: (Typeable sub, Typeable st) => AcidState st -> sub st
+downcast AcidState{acidSubState = AnyState sub}
+  = r
+ where
+   r = case gcast (Just sub) of
+         Just (Just x) -> x
+         _ ->
+           error $
+            "Data.Acid: Invalid subtype cast: " ++ show (typeOf sub) ++ " -> " ++ show (typeOf r)
+#else
 downcast :: Typeable1 sub => AcidState st -> sub st
 downcast AcidState{acidSubState = AnyState sub}
   = r
@@ -115,3 +138,4 @@ downcast AcidState{acidSubState = AnyState sub}
          _ ->
            error $
             "Data.Acid: Invalid subtype cast: " ++ show (typeOf1 sub) ++ " -> " ++ show (typeOf1 r)
+#endif

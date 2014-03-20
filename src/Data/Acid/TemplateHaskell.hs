@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, CPP #-}
 {- Holy crap this code is messy. -}
 module Data.Acid.TemplateHaskell
     ( makeAcidic
@@ -115,7 +115,7 @@ makeIsAcidic eventNames stateName tyvars constructors
 -- We will get an ambigious type variable when trying to create the
 -- 'IsAcidic' instance, because there is no way to figure out what
 -- type 'b' should be.
--- 
+--
 -- The tricky part of this code is that we need to unify the type
 -- variables.
 --
@@ -133,7 +133,7 @@ eventCxts :: Type        -- ^ State type (used for error messages)
           -> Type        -- ^ 'Type' of the event
           -> [Pred]      -- ^ extra context to add to 'IsAcidic' instance
 eventCxts targetStateType targetTyVars eventName eventType =
-    let (_tyvars, cxt, _args, stateType, _resultType, _isUpdate) 
+    let (_tyvars, cxt, _args, stateType, _resultType, _isUpdate)
                     = analyseType eventName eventType
         eventTyVars = findTyVars stateType -- find the type variable names that this event is using for the State type
         table       = zip eventTyVars (map tyVarBndrName targetTyVars) -- create a lookup table
@@ -158,7 +158,7 @@ eventCxts targetStateType targetTyVars eventName eventType =
 
       -- | rename a 'Name'
       renameName :: Pred -> [(Name, Name)] -> Name -> Name
-      renameName pred table n = 
+      renameName pred table n =
           case lookup n table of
             Nothing -> error $ unlines [ show $ ppr_sig eventName eventType
                                        , ""
@@ -166,7 +166,7 @@ eventCxts targetStateType targetTyVars eventName eventType =
                                        , ""
                                        , pprint pred
                                        , ""
-                                       , "contains a type variable which is not found in the state type: " 
+                                       , "contains a type variable which is not found in the state type: "
                                        , ""
                                        , pprint targetStateType
                                        , ""
@@ -202,8 +202,8 @@ makeEventHandler eventName eventType
                       , ""
                       , pprint stateType
                       ]
-                      
-                      
+
+
 
 --data MyUpdateEvent = MyUpdateEvent Arg1 Arg2
 --  deriving (Typeable)
@@ -259,8 +259,13 @@ makeMethodInstance eventName eventType
              structType = foldl appT (conT eventStructName) [ varT tyvar | PlainTV tyvar <- tyvars ]
          instanceD (cxt $ [ classP classPred [varT tyvar] | PlainTV tyvar <- tyvars, classPred <- preds ] ++ map return context)
                    (return ty)
+#if __GLASGOW_HASKELL__ >= 707
+                   [ tySynInstD ''MethodResult (tySynEqn [structType] (return resultType))
+                   , tySynInstD ''MethodState  (tySynEqn [structType] (return stateType))
+#else
                    [ tySynInstD ''MethodResult [structType] (return resultType)
                    , tySynInstD ''MethodState  [structType] (return stateType)
+#endif
                    ]
     where (tyvars, context, _args, stateType, resultType, _isUpdate) = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
