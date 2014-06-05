@@ -1,9 +1,8 @@
-
 import Benchmark.Prelude
 import Criterion.Main
 import qualified Data.Acid as Acid
 import qualified Benchmark.FileSystem as FS
-import qualified Benchmark.Model as Model; import Benchmark.Model (Model)
+import qualified Benchmark.Model as Model;import Benchmark.Model (Model)
 import qualified System.Random as Random
 
 
@@ -19,7 +18,6 @@ main = do
   putStrLn $ "Working under the following temporary directory: " ++ FS.encodeString workingPath
   FS.removeTreeIfExists workingPath
   FS.createTree workingPath
-
   defaultMain =<< sequence
     [
       prepareBenchmarksGroup workingPath $ 100,
@@ -47,6 +45,7 @@ prepareBenchmarksGroup workingPath size = do
 
   putStrLn "Copying"
   FS.copy checkpointInstancePath logsInstancePath
+  putStrLn "Removing"
   FS.removeFile $ logsInstancePath <> "open.lock"
 
   putStrLn "Checkpointing"
