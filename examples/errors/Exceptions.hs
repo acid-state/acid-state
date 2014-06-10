@@ -19,7 +19,7 @@ import           Prelude             hiding (catch)
 ------------------------------------------------------
 -- The Haskell structure that we want to encapsulate
 
-newtype MyState = MyState Integer
+data MyState = MyState Integer
     deriving (Show, Typeable)
 
 $(deriveSafeCopy 0 'base ''MyState)
@@ -36,12 +36,24 @@ errorEvent = error "error!"
 stateError :: Update MyState ()
 stateError = put (error "state error!")
 
+stateNestedError1 :: Update MyState ()
+stateNestedError1 = put (MyState (error "nested state error (1)"))
+
+stateNestedError2 :: Integer -> Update MyState ()
+stateNestedError2 n = put (MyState n)
+
 tick :: Update MyState Integer
 tick = do MyState n <- get
           put $ MyState (n+1)
           return n
 
-$(makeAcidic ''MyState ['failEvent, 'errorEvent, 'stateError, 'tick])
+$(makeAcidic ''MyState [ 'failEvent
+                       , 'errorEvent
+                       , 'stateError
+                       , 'stateNestedError1
+                       , 'stateNestedError2
+                       , 'tick
+                       ])
 
 ------------------------------------------------------
 -- This is how AcidState is used:
@@ -54,7 +66,9 @@ main = do acid <- openLocalStateFrom "state/Exceptions" (MyState 0)
             ["2"] -> update acid FailEvent
             ["3"] -> update acid ErrorEvent
             ["4"] -> update acid StateError
-            _     -> do putStrLn "Call with '1', '2', '3' or '4' to test error scenarios."
+            ["5"] -> update acid StateNestedError1
+            ["6"] -> update acid (StateNestedError2 (error "nested state error (2)"))
+            _     -> do putStrLn "Call with [123456] to test error scenarios."
                         putStrLn "If the tick doesn't get stuck, everything is fine."
                         n <- update acid Tick
                         putStrLn $ "Tick: " ++ show n

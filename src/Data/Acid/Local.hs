@@ -27,12 +27,12 @@ import Data.Acid.Common
 import Data.Acid.Abstract
 
 import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar )
-import Control.Exception              ( onException )
+import Control.Exception              ( onException, evaluate )
 import Control.Monad.State            ( runState )
 import Control.Monad                  ( join )
 import Control.Applicative            ( (<$>), (<*>) )
 import Data.ByteString.Lazy           ( ByteString )
---import qualified Data.ByteString.Lazy as Lazy ( length )
+import qualified Data.ByteString.Lazy as Lazy ( length )
 
 
 import Data.Serialize                 ( runPutLazy, runGetLazy )
@@ -81,8 +81,11 @@ scheduleLocalUpdate :: UpdateEvent event => LocalState (EventState event) -> eve
 scheduleLocalUpdate acidState event
     = do mvar <- newEmptyMVar
          let encoded = runPutLazy (safePut event)
-         --evaluate (Lazy.length encoded) -- It would be best to encode the event before we lock the core
-                                          -- but it hurts performance /-:
+
+         -- It is important that we encode the event now so that we can catch
+         -- any exceptions (see nestedStateError in examples/errors/Exceptions.hs)
+         evaluate (Lazy.length encoded)
+
          modifyCoreState_ (localCore acidState) $ \st ->
            do let !(result, !st') = runState hotMethod st
               -- Schedule the log entry. Very important that it happens when 'localCore' is locked
