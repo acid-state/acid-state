@@ -17,7 +17,6 @@ module Data.Acid.Local
     , openLocalStateFrom
     , prepareLocalState
     , prepareLocalStateFrom
-    , createLocalArchive
     , createCheckpointAndClose
     ) where
 
@@ -280,13 +279,6 @@ closeLocalState acidState
          closeFileLog (localCheckpoints acidState)
          releasePrefixLock (localLock acidState)
 
-
--- | Move all log files that are no longer necessary for state restoration into the 'Archive'
---   folder in the state directory. This folder can then be backed up or thrown out as you see fit.
---   Reverting to a state before the last checkpoint will not be possible if the 'Archive' folder
---   has been thrown out.
---
---   This method is idempotent and does not block the normal operation of the AcidState.
 createLocalArchive :: LocalState st -> IO ()
 createLocalArchive state
   = do -- We need to look at the last checkpoint saved to disk. Since checkpoints can be written

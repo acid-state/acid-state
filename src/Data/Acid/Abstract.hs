@@ -59,6 +59,12 @@ data AcidState st
 --
 --   This call will not return until the operation has succeeded.
                 createCheckpoint :: IO ()
+-- | Move all log files that are no longer necessary for state restoration into the 'Archive'
+--   folder in the state directory. This folder can then be backed up or thrown out as you see fit.
+--   Reverting to a state before the last checkpoint will not be possible if the 'Archive' folder
+--   has been thrown out.
+--
+--   This method is idempotent and does not block the normal operation of the AcidState.
               , createArchive :: IO ()
               ,
 -- | Close an AcidState and associated resources.
