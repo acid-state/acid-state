@@ -251,7 +251,6 @@ resumeLocalStateFrom directory initialState delayLocking =
             Right val -> return (eventCutOff, val)
     replayEvents lock n st = do
       core <- mkCore (eventsToMethods acidEvents) st
-
       eventsLog <- openFileLog eventsLogKey
       events <- readEntriesFrom eventsLog n
       mapM_ (runColdMethod core) events

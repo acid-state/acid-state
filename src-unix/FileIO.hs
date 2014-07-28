@@ -118,7 +118,7 @@ checkBreakError e | SE.isDoesNotExistError e = return ()
 takeLock :: FilePath -> IO PrefixLock
 takeLock fp = do
   createDirectoryIfMissing True (takeDirectory fp)
-  h <- openFd fp ReadWrite (Just 0o600) (defaultFileFlags {exclusive = True, trunc = True}) >>= fdToHandle
+  h <- openFile fp ReadWriteMode -- openFd fp ReadWrite (Just 0o600) (defaultFileFlags {exclusive = True, trunc = True}) >>= fdToHandle
   pid <- getProcessID
   hPutStrLn h (show pid) >> hClose h
   -- Read back our own lock and make sure its still ours

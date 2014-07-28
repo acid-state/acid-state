@@ -1,6 +1,6 @@
 module Benchmark.Model where
 
-import Benchmark.Prelude
+import Benchmark.Prelude hiding (insert)
 import qualified Data.Acid as Acid
 
 
