@@ -1,6 +1,6 @@
-acid-state 
-===========
-Unplug your machine and restart and have your app recover to exactly where it left off. Acid-State spares you the need to deal with all the marshalling, consistency, and configuration headache that you would have if you used an external DBMS for this purpose.
+acid-state [![Hackage](https://img.shields.io/hackage/v/acid-state.svg)](https://hackage.haskell.org/package/hackernews) [![Build Status](https://travis-ci.org/acid-state/acid-state.svg)](https://travis-ci.org/acid-state/acid-state)
+==========
+Unplug your machine, restart and have your app recover to exactly where it left off. Acid-State spares you the need to deal with all the marshalling, consistency, and configuration headache that you would have if you used an external DBMS for this purpose.
 
 How does it work?
 ===========
