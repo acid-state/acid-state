@@ -148,9 +148,7 @@ createCheckpointAndClose abstract_state
               pushAction (localEvents acidState) $
                 pushEntry (localCheckpoints acidState) (Checkpoint eventId (runPutLazy (safePut st))) (putMVar mvar ())
          takeMVar mvar
-         closeFileLog (localEvents acidState)
-         closeFileLog (localCheckpoints acidState)
-         releasePrefixLock (localLock acidState)
+         closeLog acidState
   where acidState = downcast abstract_state
 
 
@@ -275,7 +273,11 @@ checkpointRestoreError msg
 closeLocalState :: LocalState st -> IO ()
 closeLocalState acidState
     = do closeCore (localCore acidState)
-         closeFileLog (localEvents acidState)
+         closeLog acidState
+
+closeLog :: LocalState st -> IO ()
+closeLog acidState
+    = do closeFileLog (localEvents acidState)
          closeFileLog (localCheckpoints acidState)
          releasePrefixLock (localLock acidState)
 
