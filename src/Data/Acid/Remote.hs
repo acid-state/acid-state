@@ -255,7 +255,7 @@ acidServer' checkAuth listenSocket acidState
        infi
     where
       logError :: (Show e) => e -> IO ()
-      logError e = hPrint stderr e
+      logError = hPrint stderr
 
       isResourceVanishedError :: IOException -> Bool
       isResourceVanishedError = isResourceVanishedType . ioeGetErrorType
