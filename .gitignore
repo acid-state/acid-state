@@ -1,2 +1,12 @@
 dist/**
 *.swp
+.hpc/
+*.hi
+*.o
+*.p_hi
+*.prof
+*.tix
+cabal.config
+.cabal-sandbox/
+cabal.sandbox.config
+dist-sandbox
