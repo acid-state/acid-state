@@ -13,6 +13,8 @@ module Data.Acid.Advanced
     ( scheduleUpdate
     , groupUpdates
     , update'
+    , update_
+    , update_'
     , query'
     , Method(..)
     , IsAcidic(..)

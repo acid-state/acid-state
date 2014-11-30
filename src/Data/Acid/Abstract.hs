@@ -5,6 +5,8 @@ module Data.Acid.Abstract
     , groupUpdates
     , update
     , update'
+    , update_
+    , update_'
     , query
     , query'
     , mkAnyState
@@ -108,6 +110,14 @@ update acidState event = takeMVar =<< scheduleUpdate acidState event
 -- | Same as 'update' but lifted into any monad capable of doing IO.
 update' :: (UpdateEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
 update' acidState event = liftIO (update acidState event)
+
+-- | Same as 'update' but throws away result.
+update_ :: UpdateEvent event => AcidState (EventState event) -> event -> IO ()
+update_ acidState event = update acidState event >> return ()
+
+-- | Combine 'update_' and 'update''.
+update_' :: (UpdateEvent event, MonadIO m) => AcidState (EventState event) -> event -> m ()
+update_' acidState event = update' acidState event >> return ()
 
 -- | Issue a Query event and wait for its result. Events may be issued in parallel.
 query :: QueryEvent event => AcidState (EventState event) -> event -> IO (EventResult event)
