@@ -114,10 +114,12 @@ update' acidState event = liftIO (update acidState event)
 -- | Same as 'update' but throws away result.
 update_ :: UpdateEvent event => AcidState (EventState event) -> event -> IO ()
 update_ acidState event = update acidState event >> return ()
+{-# INLINE update_ #-}
 
 -- | Combine 'update_' and 'update''.
 update_' :: (UpdateEvent event, MonadIO m) => AcidState (EventState event) -> event -> m ()
 update_' acidState event = update' acidState event >> return ()
+{-# INLINE update_' #-}
 
 -- | Issue a Query event and wait for its result. Events may be issued in parallel.
 query :: QueryEvent event => AcidState (EventState event) -> event -> IO (EventResult event)
