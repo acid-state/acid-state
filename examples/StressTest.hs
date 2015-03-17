@@ -59,7 +59,7 @@ main = do args <- getArgs
             ["clear"]
               -> do update acid ClearState
                     createCheckpoint acid
-            _ -> do putStrLn $ "Commands:"
-                    putStrLn $ "  query            Prints out the current state."
-                    putStrLn $ "  poke             Spawn 100k transactions."
-                    putStrLn $ "  checkpoint       Create a new checkpoint."
+            _ -> do putStrLn "Commands:"
+                    putStrLn "  query            Prints out the current state."
+                    putStrLn "  poke             Spawn 100k transactions."
+                    putStrLn "  checkpoint       Create a new checkpoint."

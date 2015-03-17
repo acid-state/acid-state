@@ -46,7 +46,7 @@ main = do acid <- openLocalState (HelloWorldState "Hello world")
              then do string <- query acid QueryState
                      putStrLn $ "The state is: " ++ string
              else do update acid (WriteState (unwords args))
-                     putStrLn $ "The state has been modified!"
+                     putStrLn "The state has been modified!"
 
 
 ------------------------------------------------------

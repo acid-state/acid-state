@@ -6,7 +6,6 @@ module Main (main) where
 
 import           Data.Acid
 
-import           Control.Applicative  ((<$>))
 import           Control.Monad.Reader (ask)
 import           Control.Monad.State  (get, put)
 import           Data.SafeCopy

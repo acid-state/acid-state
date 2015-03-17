@@ -74,10 +74,10 @@ main = do args <- getArgs
             ["checkpoint", socket]
               -> do acid <- openRemote socket
                     createCheckpoint acid
-            _ -> do putStrLn $ "Commands:"
-                    putStrLn $ "  server socket      Start a new server instance."
-                    putStrLn $ "  proxy from to      Pipe events between 'from' and 'to'."
-                    putStrLn $ "  query socket       Prints out the current state."
-                    putStrLn $ "  poke socket        Spawn 100k transactions."
-                    putStrLn $ "  clear socket       Reset the state and write a checkpoint."
-                    putStrLn $ "  checkpoint socket  Create a new checkpoint."
+            _ -> do putStrLn "Commands:"
+                    putStrLn "  server socket      Start a new server instance."
+                    putStrLn "  proxy from to      Pipe events between 'from' and 'to'."
+                    putStrLn "  query socket       Prints out the current state."
+                    putStrLn "  poke socket        Spawn 100k transactions."
+                    putStrLn "  clear socket       Reset the state and write a checkpoint."
+                    putStrLn "  checkpoint socket  Create a new checkpoint."

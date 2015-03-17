@@ -53,10 +53,10 @@ main = do args <- getArgs
                     hFlush stdout
                     groupUpdates acid (replicate 100000 PokeState)
                     putStrLn "Done"
-            _ -> do putStrLn $ "Commands:"
-                    putStrLn $ "  query            Prints out the current state."
-                    putStrLn $ "  poke             Spawn 100k transactions."
-                    putStrLn $ "  checkpoint       Create a new checkpoint."
+            _ -> do putStrLn "Commands:"
+                    putStrLn "  query            Prints out the current state."
+                    putStrLn "  poke             Spawn 100k transactions."
+                    putStrLn "  checkpoint       Create a new checkpoint."
 
 ------------------------------------------------------
 -- The gritty details. These things may be done with
