@@ -141,8 +141,12 @@ eventCxts targetStateType targetTyVars eventName eventType =
     where
       -- | rename the type variables in a Pred
       unify :: [(Name, Name)] -> Pred -> Pred
+#if MIN_VERSION_template_haskell(2,10,0)
+      unify table p = rename p table p -- in 2.10.0: type Pred = Type
+#else
       unify table p@(ClassP n tys) = ClassP n (map (rename p table) tys)
       unify table p@(EqualP a b)   = EqualP (rename p table a) (rename p table b)
+#endif
 
       -- | rename the type variables in a Type
       rename :: Pred -> [(Name, Name)] -> Type -> Type

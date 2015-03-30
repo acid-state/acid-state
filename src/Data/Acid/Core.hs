@@ -59,9 +59,13 @@ import Data.Typeable.Internal             ( TypeRep (..), tyConModule )
 -- of base. We could do something better, but happstack-state is
 -- end-of-life anyway.
 showQualifiedTypeRep :: TypeRep -> String
-showQualifiedTypeRep tr =
-    let (TypeRep _f con _rep) = tr
-    in tyConModule con ++ "." ++ show tr
+showQualifiedTypeRep tr = tyConModule con ++ "." ++ show tr
+  where con = extractTypeRepCon tr
+#if MIN_VERSION_base(4,8,0)
+        extractTypeRepCon (TypeRep _ c _ _) = c
+#else
+        extractTypeRepCon (TypeRep _ c _) = c
+#endif
 
 #else
 
