@@ -29,7 +29,7 @@ FAQ
 - Does AcidState have a mechanism for interactive queries?
   - Using `Data.Acid.Remote`, you should be able to fire up `ghci` and run existing queries interactively. You can then munge that data using normal Haskell functions. Obviously, this is not a total solution. It would be nice to see some generics based stuff added to make this process friendlier and more powerful.
 - My process seems to be consuming a bunch of CPU even though it is idle, why is that?
-  - Run your application with `+RTS -IO` (which can be done via compile time options in your .cabal). This disables idle-time garbage collection which is almost always the cause of CPU usage while idle in acid-state based apps.
+  - Run your application with `+RTS -I0` (which can be done via compile time options in your .cabal). This disables idle-time garbage collection which is almost always the cause of CPU usage while idle in acid-state based apps.
 - How does AcidState deal with the presence of very big data structures which may not fit in memory?
   - There are a few answers to this depending on the situation. One solution is to just buy more RAM. After all, you can buy machines with 1TB of RAM these days. But, obviously, not everyone has that kind of budget. (Interestingly, Facebook keeps something like 90% of their working data in RAM using TBs of memcached servers.)
 
