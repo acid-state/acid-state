@@ -11,6 +11,7 @@ import Data.Acid.Core
 import Data.Acid.Common
 
 import Data.List ((\\), nub)
+import Data.Maybe (mapMaybe)
 import Data.SafeCopy
 import Data.Typeable
 import Data.Char
@@ -91,7 +92,7 @@ makeIsAcidic eventNames stateName tyvars constructors
          cxts' <- mkCxtFromTyVars preds tyvars cxtFromEvents
          instanceD (return cxts') ty
                    [ valD (varP 'acidEvents) (normalB (listE handlers)) [] ]
-    where stateType = foldl appT (conT stateName) [ varT var | PlainTV var <- tyvars ]
+    where stateType = foldl appT (conT stateName) (map varT (allTyVarBndrNames tyvars))
 
 -- | This function analyses an event function and extracts any
 -- additional class contexts which need to be added to the IsAcidic
@@ -226,7 +227,7 @@ makeEventDataType eventName eventType
 --    get = MyUpdateEvent <$> get <*> get
 makeSafeCopyInstance eventName eventType
     = do let preds = [ ''SafeCopy ]
-             ty = AppT (ConT ''SafeCopy) (foldl AppT (ConT eventStructName) [ VarT tyvar | PlainTV tyvar <- tyvars ])
+             ty = AppT (ConT ''SafeCopy) (foldl AppT (ConT eventStructName) (map VarT (allTyVarBndrNames tyvars)))
 
              getBase = appE (varE 'return) (conE eventStructName)
              getArgs = foldl (\a b -> infixE (Just a) (varE '(<*>)) (Just (varE 'safeGet))) getBase args
@@ -248,7 +249,7 @@ makeSafeCopyInstance eventName eventType
           structName (x:xs) = toUpper x : xs
 
 mkCxtFromTyVars preds tyvars extraContext
-    = cxt $ [ classP classPred [varT tyvar] | PlainTV tyvar <- tyvars, classPred <- preds ] ++
+    = cxt $ [ classP classPred [varT tyvar] | tyvar <- plainTyVarBndrNames tyvars, classPred <- preds ] ++
             map return extraContext
 
 {-
@@ -259,9 +260,9 @@ instance (SafeCopy key, Typeable key
 -}
 makeMethodInstance eventName eventType
     = do let preds = [ ''SafeCopy, ''Typeable ]
-             ty = AppT (ConT ''Method) (foldl AppT (ConT eventStructName) [ VarT tyvar | PlainTV tyvar <- tyvars ])
-             structType = foldl appT (conT eventStructName) [ varT tyvar | PlainTV tyvar <- tyvars ]
-         instanceD (cxt $ [ classP classPred [varT tyvar] | PlainTV tyvar <- tyvars, classPred <- preds ] ++ map return context)
+             ty = AppT (ConT ''Method) (foldl AppT (ConT eventStructName) (map VarT (allTyVarBndrNames tyvars)))
+             structType = foldl appT (conT eventStructName) (map varT (allTyVarBndrNames tyvars))
+         instanceD (cxt $ [ classP classPred [varT tyvar] | tyvar <- plainTyVarBndrNames tyvars, classPred <- preds ] ++ map return context)
                    (return ty)
 #if __GLASGOW_HASKELL__ >= 707
                    [ tySynInstD ''MethodResult (tySynEqn [structType] (return resultType))
@@ -281,8 +282,8 @@ makeMethodInstance eventName eventType
 makeEventInstance eventName eventType
     = do let preds = [ ''SafeCopy, ''Typeable ]
              eventClass = if isUpdate then ''UpdateEvent else ''QueryEvent
-             ty = AppT (ConT eventClass) (foldl AppT (ConT eventStructName) [ VarT tyvar | PlainTV tyvar <- tyvars ])
-         instanceD (cxt $ [ classP classPred [varT tyvar] | PlainTV tyvar <- tyvars, classPred <- preds ] ++ map return context)
+             ty = AppT (ConT eventClass) (foldl AppT (ConT eventStructName) (map VarT (allTyVarBndrNames tyvars)))
+         instanceD (cxt $ [ classP classPred [varT tyvar] | tyvar <- plainTyVarBndrNames tyvars, classPred <- preds ] ++ map return context)
                    (return ty)
                    []
     where (tyvars, context, _args, _stateType, _resultType, isUpdate) = analyseType eventName eventType
@@ -327,3 +328,13 @@ findTyVars _          = []
 tyVarBndrName :: TyVarBndr -> Name
 tyVarBndrName (PlainTV n)    = n
 tyVarBndrName (KindedTV n _) = n
+
+plainTyVarBndrName :: TyVarBndr -> Maybe Name
+plainTyVarBndrName (PlainTV name) = Just name
+plainTyVarBndrName _ = Nothing
+
+plainTyVarBndrNames :: [TyVarBndr] -> [Name]
+plainTyVarBndrNames tyvars = mapMaybe plainTyVarBndrName tyvars
+
+allTyVarBndrNames :: [TyVarBndr] -> [Name]
+allTyVarBndrNames tyvars = map tyVarBndrName tyvars
