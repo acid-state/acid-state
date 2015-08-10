@@ -17,7 +17,11 @@ module Data.Acid.Local
     , openLocalStateFrom
     , prepareLocalState
     , prepareLocalStateFrom
+    , scheduleLocalUpdate'
+    , scheduleLocalColdUpdate'
     , createCheckpointAndClose
+    , LocalState(..)
+    , Checkpoint(..)
     ) where
 
 import Data.Acid.Log as Log
@@ -95,6 +99,30 @@ scheduleLocalUpdate acidState event
          return mvar
     where hotMethod = lookupHotMethod (coreMethods (localCore acidState)) event
 
+-- | Same as scheduleLocalUpdate but does not immediately change the localCopy
+-- and return the result mvar - returns an IO action to do this instead.
+scheduleLocalUpdate' :: UpdateEvent event => LocalState (EventState event) -> event -> MVar (EventResult event) -> IO (IO ())
+scheduleLocalUpdate' acidState event mvar
+    = do
+         let encoded = runPutLazy (safePut event)
+
+         -- It is important that we encode the event now so that we can catch
+         -- any exceptions (see nestedStateError in examples/errors/Exceptions.hs)
+         evaluate (Lazy.length encoded)
+
+         act <- modifyCoreState (localCore acidState) $ \st ->
+           do let !(result, !st') = runState hotMethod st
+              -- Schedule the log entry. Very important that it happens when 'localCore' is locked
+              -- to ensure that events are logged in the same order that they are executed.
+              pushEntry (localEvents acidState) (methodTag event, encoded) $ return ()
+              let action = do writeIORef (localCopy acidState) st'
+                              putMVar mvar result
+              return (st', action)
+         -- this is the action to update state for queries and release the
+         -- result into the supplied mvar
+         return act
+    where hotMethod = lookupHotMethod (coreMethods (localCore acidState)) event
+
 scheduleLocalColdUpdate :: LocalState st -> Tagged ByteString -> IO (MVar ByteString)
 scheduleLocalColdUpdate acidState event
     = do mvar <- newEmptyMVar
@@ -106,6 +134,23 @@ scheduleLocalColdUpdate acidState event
                                                            putMVar mvar result
               return st'
          return mvar
+    where coldMethod = lookupColdMethod (localCore acidState) event
+
+-- | Same as scheduleLocalColdUpdate but does not immediately change the
+-- localCopy and return the result mvar - returns an IO action to do this
+-- instead.
+scheduleLocalColdUpdate' :: LocalState st -> Tagged ByteString -> IO ((MVar ByteString), IO ())
+scheduleLocalColdUpdate' acidState event
+    = do mvar <- newEmptyMVar
+         act <- modifyCoreState (localCore acidState) $ \st ->
+           do let !(result, !st') = runState coldMethod st
+              -- Schedule the log entry. Very important that it happens when 'localCore' is locked
+              -- to ensure that events are logged in the same order that they are executed.
+              pushEntry (localEvents acidState) event $ return ()
+              let action = do writeIORef (localCopy acidState) st'
+                              putMVar mvar result
+              return (st', action)
+         return (mvar, act)
     where coldMethod = lookupColdMethod (localCore acidState) event
 
 -- | Issue a Query event and wait for its result. Events may be issued in parallel.

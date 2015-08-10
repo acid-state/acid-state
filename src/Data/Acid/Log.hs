@@ -3,7 +3,7 @@
 -- extendible array of entries.
 --
 module Data.Acid.Log
-    ( FileLog
+    ( FileLog(..)
     , LogKey(..)
     , EntryId
     , openFileLog
