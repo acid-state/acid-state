@@ -100,7 +100,9 @@ scheduleLocalUpdate acidState event
     where hotMethod = lookupHotMethod (coreMethods (localCore acidState)) event
 
 -- | Same as scheduleLocalUpdate but does not immediately change the localCopy
--- and return the result mvar - returns an IO action to do this instead.
+-- and return the result mvar - returns an IO action to do this instead. Take
+-- care to run actions of multiple Updates in the correct order as otherwise
+-- Queries will operate on outdated state.
 scheduleLocalUpdate' :: UpdateEvent event => LocalState (EventState event) -> event -> MVar (EventResult event) -> IO (IO ())
 scheduleLocalUpdate' acidState event mvar
     = do
@@ -138,11 +140,11 @@ scheduleLocalColdUpdate acidState event
 
 -- | Same as scheduleLocalColdUpdate but does not immediately change the
 -- localCopy and return the result mvar - returns an IO action to do this
--- instead.
-scheduleLocalColdUpdate' :: LocalState st -> Tagged ByteString -> IO ((MVar ByteString), IO ())
-scheduleLocalColdUpdate' acidState event
-    = do mvar <- newEmptyMVar
-         act <- modifyCoreState (localCore acidState) $ \st ->
+-- instead. Take care to run actions of multiple Updates in the correct order as
+-- otherwise Queries will operate on outdated state.
+scheduleLocalColdUpdate' :: LocalState st -> Tagged ByteString -> MVar ByteString -> IO (IO ())
+scheduleLocalColdUpdate' acidState event mvar
+    = do act <- modifyCoreState (localCore acidState) $ \st ->
            do let !(result, !st') = runState coldMethod st
               -- Schedule the log entry. Very important that it happens when 'localCore' is locked
               -- to ensure that events are logged in the same order that they are executed.
@@ -150,7 +152,7 @@ scheduleLocalColdUpdate' acidState event
               let action = do writeIORef (localCopy acidState) st'
                               putMVar mvar result
               return (st', action)
-         return (mvar, act)
+         return act
     where coldMethod = lookupColdMethod (localCore acidState) event
 
 -- | Issue a Query event and wait for its result. Events may be issued in parallel.
