@@ -35,15 +35,14 @@ data AnyState st where
 {-| State container offering full ACID (Atomicity, Consistency, Isolation and Durability)
     guarantees.
 
-    [@Atomicity@]  State changes are all-or-nothing. This is what you'd expect of any state
-                   variable in Haskell and AcidState doesn't change that.
-
+    [@Atomicity@]   State changes are all-or-nothing. This is what you'd expect
+                    of any state variable in Haskell and AcidState doesn't
+                    change that.
     [@Consistency@] No event or set of events will break your data invariants.
-
-    [@Isolation@] Transactions cannot interfere with each other even when issued in parallel.
-
-    [@Durability@] Successful transaction are guaranteed to survive unexpected system shutdowns
-                   (both those caused by hardware and software).
+    [@Isolation@]   Transactions cannot interfere with each other even when
+                    issued in parallel.
+    [@Durability@]  Successful transaction are guaranteed to survive unexpected
+                    system shutdowns (both those caused by hardware and software).
 -}
 data AcidState st
   = AcidState {
