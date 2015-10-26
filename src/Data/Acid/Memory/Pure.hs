@@ -7,7 +7,7 @@
 -- Maintainer  :  lemmih@gmail.com
 -- Portability :  non-portable (uses GHC extensions)
 --
--- AcidState container without a transaction log. Mostly used for testing. 
+-- AcidState container without a transaction log. Mostly used for testing.
 --
 
 module Data.Acid.Memory.Pure
@@ -80,10 +80,10 @@ query acidState event
 
 -- | Create an AcidState given an initial value.
 openAcidState :: IsAcidic st
-              => st                          -- ^ Initial state value. 
+              => st                          -- ^ Initial state value.
               -> AcidState st
 openAcidState initialState
-    = AcidState { localMethods = mkMethodMap (eventsToMethods acidEvents) 
+    = AcidState { localMethods = mkMethodMap (eventsToMethods acidEvents)
                 , localState   = initialState }
 
 -- | Execute the 'Update' monad in a pure environment.

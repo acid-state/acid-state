@@ -33,7 +33,7 @@ data NodeMode = Booting | Running
 data ReplicatedState st =
   ReplicatedState { repLocalState :: AcidState st
                   , repBroadcast :: ZMQ.Socket ZMQ.Pub
-                  , repUnicast :: Map NodeId (ZMQ.Socket ZMQ.Pub)                  
+                  , repUnicast :: Map NodeId (ZMQ.Socket ZMQ.Pub)
                   , repReceive :: ZMQ.Socket ZMQ.Sub
                   , repNodeModes :: Map NodeId NodeMode
                   , repOrderingQueue :: IntMap Strict.ByteString
