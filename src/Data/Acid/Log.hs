@@ -3,7 +3,7 @@
 -- extendible array of entries.
 --
 module Data.Acid.Log
-    ( FileLog
+    ( FileLog(..)
     , LogKey(..)
     , EntryId
     , openFileLog
@@ -43,6 +43,7 @@ import Text.Printf                               ( printf )
 
 import Paths_acid_state                          ( version )
 import Data.Version                              ( showVersion )
+import Control.Exception                         ( handle, IOException )
 
 type EntryId = Int
 
@@ -87,7 +88,8 @@ openFileLog identifier = do
   currentState <- newEmptyMVar
   queue <- newTVarIO ([], [])
   nextEntryRef <- newTVarIO 0
-  tid2 <- forkIO $ fileWriter currentState queue
+  tid1 <- myThreadId
+  tid2 <- forkIO $ fileWriter currentState queue tid1
   let fLog = FileLog { logIdentifier  = identifier
                      , logCurrent     = currentState
                      , logNextEntryId = nextEntryRef
@@ -105,16 +107,17 @@ openFileLog identifier = do
              putMVar currentState handle
   return fLog
 
-fileWriter :: MVar FHandle -> TVar ([Lazy.ByteString], [IO ()]) -> IO ()
-fileWriter currentState queue = forever $ do
+fileWriter :: MVar FHandle -> TVar ([Lazy.ByteString], [IO ()]) -> ThreadId -> IO ()
+fileWriter currentState queue parentTid = forever $ do
   (entries, actions) <- atomically $ do
     (entries, actions) <- readTVar queue
     when (null entries && null actions) retry
     writeTVar queue ([], [])
     return (reverse entries, reverse actions)
-  withMVar currentState $ \fd -> do
-    let arch = Archive.packEntries entries
-    writeToDisk fd (repack arch)
+  handle (\e -> throwTo parentTid (e :: IOException)) $
+    withMVar currentState $ \fd -> do
+      let arch = Archive.packEntries entries
+      writeToDisk fd (repack arch)
   sequence_ actions
   yield
 

@@ -1,5 +1,5 @@
 Name:                acid-state
-Version:             0.12.4
+Version:             0.13.1
 Synopsis:            Add ACID guarantees to any serializable Haskell data structure.
 Description:         Use regular Haskell data structures as your database and get stronger ACID guarantees than most RDBMS offer.
 Homepage:            http://acid-state.seize.it/
@@ -24,12 +24,13 @@ Library
   Exposed-Modules:     Data.Acid,
                        Data.Acid.Local, Data.Acid.Memory,
                        Data.Acid.Memory.Pure, Data.Acid.Remote,
-                       Data.Acid.Advanced
-
-  Other-modules:       Data.Acid.Log, Data.Acid.Archive,
-                       Data.Acid.CRC, Paths_acid_state,
-                       Data.Acid.TemplateHaskell, Data.Acid.Common, FileIO,
+                       Data.Acid.Advanced,
+                       Data.Acid.Log, Data.Acid.CRC,
                        Data.Acid.Abstract, Data.Acid.Core
+
+  Other-modules:       Data.Acid.Archive,
+                       Paths_acid_state,
+                       Data.Acid.TemplateHaskell, Data.Acid.Common, FileIO
 
   Build-depends:       array,
                        base >= 4 && < 5,
