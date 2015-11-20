@@ -249,7 +249,7 @@ makeSafeCopyInstance eventName eventType
           structName (x:xs) = toUpper x : xs
 
 mkCxtFromTyVars preds tyvars extraContext
-    = cxt $ [ classP classPred [varT tyvar] | tyvar <- plainTyVarBndrNames tyvars, classPred <- preds ] ++
+    = cxt $ [ classP classPred [varT tyvar] | tyvar <- allTyVarBndrNames tyvars, classPred <- preds ] ++
             map return extraContext
 
 {-
@@ -262,7 +262,7 @@ makeMethodInstance eventName eventType
     = do let preds = [ ''SafeCopy, ''Typeable ]
              ty = AppT (ConT ''Method) (foldl AppT (ConT eventStructName) (map VarT (allTyVarBndrNames tyvars)))
              structType = foldl appT (conT eventStructName) (map varT (allTyVarBndrNames tyvars))
-         instanceD (cxt $ [ classP classPred [varT tyvar] | tyvar <- plainTyVarBndrNames tyvars, classPred <- preds ] ++ map return context)
+         instanceD (cxt $ [ classP classPred [varT tyvar] | tyvar <- allTyVarBndrNames tyvars, classPred <- preds ] ++ map return context)
                    (return ty)
 #if __GLASGOW_HASKELL__ >= 707
                    [ tySynInstD ''MethodResult (tySynEqn [structType] (return resultType))
@@ -283,7 +283,7 @@ makeEventInstance eventName eventType
     = do let preds = [ ''SafeCopy, ''Typeable ]
              eventClass = if isUpdate then ''UpdateEvent else ''QueryEvent
              ty = AppT (ConT eventClass) (foldl AppT (ConT eventStructName) (map VarT (allTyVarBndrNames tyvars)))
-         instanceD (cxt $ [ classP classPred [varT tyvar] | tyvar <- plainTyVarBndrNames tyvars, classPred <- preds ] ++ map return context)
+         instanceD (cxt $ [ classP classPred [varT tyvar] | tyvar <- allTyVarBndrNames tyvars, classPred <- preds ] ++ map return context)
                    (return ty)
                    []
     where (tyvars, context, _args, _stateType, _resultType, isUpdate) = analyseType eventName eventType
@@ -328,13 +328,6 @@ findTyVars _          = []
 tyVarBndrName :: TyVarBndr -> Name
 tyVarBndrName (PlainTV n)    = n
 tyVarBndrName (KindedTV n _) = n
-
-plainTyVarBndrName :: TyVarBndr -> Maybe Name
-plainTyVarBndrName (PlainTV name) = Just name
-plainTyVarBndrName _ = Nothing
-
-plainTyVarBndrNames :: [TyVarBndr] -> [Name]
-plainTyVarBndrNames tyvars = mapMaybe plainTyVarBndrName tyvars
 
 allTyVarBndrNames :: [TyVarBndr] -> [Name]
 allTyVarBndrNames tyvars = map tyVarBndrName tyvars
