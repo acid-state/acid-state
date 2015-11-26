@@ -18,10 +18,11 @@ import           Data.Acid.CRC
 
 import qualified Data.ByteString        as Strict
 import qualified Data.ByteString.Lazy   as Lazy
+import           Data.ByteString.Lazy.Builder
 import           Data.Monoid
-import           Data.Serialize.Builder
 import           Data.Serialize.Get     hiding (Result (..))
 import qualified Data.Serialize.Get     as Serialize
+import           Data.Serialize.Put
 
 type Entry = Lazy.ByteString
 data Entries = Done | Next Entry Entries | Fail String
@@ -39,9 +40,10 @@ entriesToListNoFail Fail{}            = []
 
 putEntry :: Entry -> Builder
 putEntry content
-    = putWord64le contentLength `mappend`
-      putWord16le contentHash `mappend`
-      fromLazyByteString content
+    = execPut $ do
+        putWord64le contentLength
+        putWord16le contentHash
+        putLazyByteString content
     where contentLength = fromIntegral $ Lazy.length content
           contentHash   = crc16 content
 
