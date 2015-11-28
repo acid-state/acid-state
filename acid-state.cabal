@@ -1,5 +1,5 @@
 Name:                acid-state
-Version:             0.13.1
+Version:             0.14.0
 Synopsis:            Add ACID guarantees to any serializable Haskell data structure.
 Description:         Use regular Haskell data structures as your database and get stronger ACID guarantees than most RDBMS offer.
 Homepage:            http://acid-state.seize.it/
@@ -11,6 +11,7 @@ Category:            Database
 Build-type:          Simple
 Cabal-version:       >=1.10
 Extra-source-files:
+        CHANGELOG.md
         examples/*.hs
         examples/errors/*.hs
         src-win32/*.hs
