@@ -57,6 +57,8 @@ main = do acid <- openLocalStateFrom "state/SlowCheckpoint" (SlowCheckpoint 0 0)
           replicateM_ 20 $
             do doTick acid
                threadDelay (10^5)
+          createCheckpoint acid
+          createArchive acid
 
 doTick acid
     = do tick <- update acid Tick
