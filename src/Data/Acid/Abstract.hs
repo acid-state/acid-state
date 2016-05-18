@@ -48,7 +48,7 @@ data AcidState st
   = AcidState {
                 _scheduleUpdate :: forall event. (UpdateEvent event, EventState event ~ st) => event -> IO (MVar (EventResult event))
               , scheduleColdUpdate :: Tagged ByteString -> IO (MVar ByteString)
-              , _query :: (QueryEvent event, EventState event ~ st)  => event -> IO (EventResult event)
+              , _query :: forall event. (QueryEvent event, EventState event ~ st) => event -> IO (EventResult event)
               , queryCold :: Tagged ByteString -> IO ByteString
               ,
 -- | Take a snapshot of the state and save it to disk. Creating checkpoints
