@@ -71,12 +71,16 @@ benchmark loading-benchmark
     benchmarks/loading
   main-is:
     Benchmark.hs
+  other-modules:
+    Benchmark.FileSystem
+    Benchmark.Model
+    Benchmark.Prelude
   build-depends:
     random,
     directory,
     system-fileio == 0.3.*,
     system-filepath,
-    criterion >= 0.8 && < 1.1,
+    criterion >= 0.8 && < 1.2,
     mtl,
     base,
     acid-state
