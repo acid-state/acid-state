@@ -48,9 +48,17 @@ makeAcidic stateName eventNames
          case stateInfo of
            TyConI tycon
              ->case tycon of
+#if MIN_VERSION_template_haskell(2,11,0)
+                 DataD _cxt _name tyvars _kind constructors _derivs
+#else
                  DataD _cxt _name tyvars constructors _derivs
+#endif
                    -> makeAcidic' eventNames stateName tyvars constructors
+#if MIN_VERSION_template_haskell(2,11,0)
+                 NewtypeD _cxt _name tyvars _kind constructor _derivs
+#else
                  NewtypeD _cxt _name tyvars constructor _derivs
+#endif
                    -> makeAcidic' eventNames stateName tyvars [constructor]
                  TySynD _name tyvars _ty
                    -> makeAcidic' eventNames stateName tyvars []
@@ -76,7 +84,11 @@ getEventType :: Name -> Q Type
 getEventType eventName
     = do eventInfo <- reify eventName
          case eventInfo of
+#if MIN_VERSION_template_haskell(2,11,0)
+           VarI _name eventType _decl
+#else
            VarI _name eventType _decl _fixity
+#endif
              -> return eventType
            _ -> error $ "Events must be functions: " ++ show eventName
 
@@ -214,9 +226,19 @@ makeEventHandler eventName eventType
 --  deriving (Typeable)
 makeEventDataType eventName eventType
     = do let con = normalC eventStructName [ strictType notStrict (return arg) | arg <- args ]
+#if MIN_VERSION_template_haskell(2,11,0)
+             cxt = mapM conT [''Typeable]
+#else
+             cxt = [''Typeable]
+#endif
          case args of
-          [_] -> newtypeD (return []) eventStructName tyvars con [''Typeable]
-          _   -> dataD (return []) eventStructName tyvars [con] [''Typeable]
+#if MIN_VERSION_template_haskell(2,11,0)
+          [_] -> newtypeD (return []) eventStructName tyvars Nothing con cxt
+          _   -> dataD (return []) eventStructName tyvars Nothing [con] cxt
+#else
+          [_] -> newtypeD (return []) eventStructName tyvars con cxt
+          _   -> dataD (return []) eventStructName tyvars [con] cxt
+#endif
     where (tyvars, _cxt, args, _stateType, _resultType, _isUpdate) = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
