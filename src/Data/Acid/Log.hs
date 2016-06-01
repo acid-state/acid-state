@@ -12,6 +12,7 @@ module Data.Acid.Log
     , pushAction
     , ensureLeastEntryId
     , readEntriesFrom
+    , readEntry
     , rollbackTo
     , rollbackWhile
     , newestEntry
@@ -192,6 +193,19 @@ readEntriesFrom fLog youngestEntry = do
          $ drop (youngestEntry - firstEntryId) entries -- Drop entries that are too young.
  where
   rangeStart (firstEntryId, _path) = firstEntryId
+
+-- Read a specific Entry or Nothing.
+readEntry :: SafeCopy object => FileLog object -> EntryId -> IO (Maybe object)
+readEntry fLog entryId = do
+  -- We're interested in the first entry of all entries: youngestEntry <= x.
+  logFiles <- findLogFiles (logIdentifier fLog)
+  let sorted = sort logFiles
+      logFile = listToMaybe $ filterLogFiles (Just entryId) (Just (entryId+1)) sorted
+
+  archive <- mapM (Strict.readFile . snd) logFile
+  let entry = join $ fmap (listToMaybe . entriesToList . readEntries . Lazy.fromStrict) archive
+
+  return (fmap decode' entry)
 
 -- Obliterate log entries younger than or equal to the EventId. Very unsafe, can't be undone
 rollbackTo :: SafeCopy object => LogKey object -> EntryId -> IO ()

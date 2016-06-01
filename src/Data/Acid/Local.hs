@@ -329,19 +329,19 @@ closeLocalState acidState
          closeFileLog (localCheckpoints acidState)
          releasePrefixLock (localLock acidState)
 
-createLocalArchive :: LocalState st -> IO ()
+createLocalArchive :: SafeCopy st => LocalState st -> IO ()
 createLocalArchive state
   = do -- We need to look at the last checkpoint saved to disk. Since checkpoints can be written
        -- in parallel with this call, we can't guarantee that the checkpoint we get really is the
        -- last one but that's alright.
-       currentCheckpointId <- cutFileLog (localCheckpoints state)
+       currentCheckpointId <- askCurrentEntryId (localCheckpoints state)
        -- 'currentCheckpointId' is the ID of the next checkpoint that will be written to disk.
        -- 'currentCheckpointId-1' must then be the ID of a checkpoint on disk (or -1, of course).
        let durableCheckpointId = currentCheckpointId-1
-       checkpoints <- readEntriesFrom (localCheckpoints state) durableCheckpointId
-       case checkpoints of
-         []      -> return ()
-         (Checkpoint entryId _content : _)
+       checkpoint <- readEntry (localCheckpoints state) durableCheckpointId
+       case checkpoint of
+         Nothing      -> return ()
+         Just (Checkpoint entryId _content)
            -> do -- 'entryId' is the lowest entryId that didn't contribute to the checkpoint.
                  -- 'archiveFileLog' moves all files that are lower than this entryId to the archive.
                  archiveFileLog (localEvents state) entryId
