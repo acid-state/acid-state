@@ -1,3 +1,10 @@
+0.14.1
+======
+
+ - fix bug in archiveLog that resulted in logs being moved prematurely (bug #22)
+ - tweaks for GHC 8.0.x, template-haskell 2.11.x
+ - fix compilation of benchmarks
+
 0.14.0
 ======
 
