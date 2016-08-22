@@ -179,7 +179,8 @@ localQueryCold acidState event
 --   This call will not return until the operation has succeeded.
 createLocalCheckpoint :: SafeCopy st => LocalState st -> IO ()
 createLocalCheckpoint acidState
-    = do mvar <- newEmptyMVar
+    = do cutFileLog (localEvents acidState)
+         mvar <- newEmptyMVar
          withCoreState (localCore acidState) $ \st ->
            do eventId <- askCurrentEntryId (localEvents acidState)
               pushAction (localEvents acidState) $
