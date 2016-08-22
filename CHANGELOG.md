@@ -1,3 +1,8 @@
+0.14.2
+======
+
+ - createCheckpoint now cuts a new events file (bug #74)
+
 0.14.1
 ======
 
