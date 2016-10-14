@@ -47,7 +47,8 @@ Library
                        filepath,
                        mtl,
                        network,
-                       template-haskell
+                       template-haskell,
+                       th-expand-syns
 
   if os(windows)
      Build-depends:       Win32

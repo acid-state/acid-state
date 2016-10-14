@@ -6,17 +6,20 @@ module Data.Acid.TemplateHaskell
 
 import Language.Haskell.TH
 import Language.Haskell.TH.Ppr
+import Language.Haskell.TH.ExpandSyns
 
 import Data.Acid.Core
 import Data.Acid.Common
 
-import Data.List ((\\), nub)
+import Data.List ((\\), nub, delete)
 import Data.Maybe (mapMaybe)
 import Data.SafeCopy
 import Data.Typeable
 import Data.Char
 import Control.Applicative
 import Control.Monad
+import Control.Monad.State (MonadState)
+import Control.Monad.Reader (MonadReader)
 
 {-| Create the control structures required for acid states
     using Template Haskell.
@@ -89,7 +92,7 @@ getEventType eventName
 #else
            VarI _name eventType _decl _fixity
 #endif
-             -> return eventType
+             -> expandSyns eventType
            _ -> error $ "Events must be functions: " ++ show eventName
 
 --instance (SafeCopy key, Typeable key, SafeCopy val, Typeable val) => IsAcidic State where
@@ -140,7 +143,15 @@ makeIsAcidic eventNames stateName tyvars constructors
 -- need to rename the variables in the context to match.
 --
 -- The contexts returned by this function will have the variables renamed.
-eventCxts :: Type        -- ^ State type (used for error messages)
+--
+-- Additionally, if the event uses MonadReader or MonadState it might look
+-- like this:
+--
+-- > setState :: (MonadState x m, IsFoo x) => m ()
+--
+-- In this case we have to rename 'x' to the actual state we're going to
+-- use. This is done by 'renameState'.
+eventCxts :: Type        -- ^ State type
           -> [TyVarBndr] -- ^ type variables that will be used for the State type in the IsAcidic instance
           -> Name        -- ^ 'Name' of the event
           -> Type        -- ^ 'Type' of the event
@@ -148,9 +159,13 @@ eventCxts :: Type        -- ^ State type (used for error messages)
 eventCxts targetStateType targetTyVars eventName eventType =
     let (_tyvars, cxt, _args, stateType, _resultType, _isUpdate)
                     = analyseType eventName eventType
-        eventTyVars = findTyVars stateType -- find the type variable names that this event is using for the State type
-        table       = zip eventTyVars (map tyVarBndrName targetTyVars) -- create a lookup table
-    in map (unify table) cxt -- rename the type variables
+        -- find the type variable names that this event is using
+        -- for the State type
+        eventTyVars = findTyVars stateType
+        -- create a lookup table
+        table       = zip eventTyVars (map tyVarBndrName targetTyVars)
+    in map (unify table) -- rename the type variables
+       (renameState stateType targetStateType cxt)
     where
       -- | rename the type variables in a Pred
       unify :: [(Name, Name)] -> Pred -> Pred
@@ -190,6 +205,21 @@ eventCxts targetStateType targetTyVars eventName eventType =
                                        , "You may be able to fix this by providing a type signature that fixes these type variable(s)"
                                        ]
             (Just n') -> n'
+
+-- | See the end of comment for 'eventCxts'.
+renameState :: Type -> Type -> Cxt -> Cxt
+renameState tfrom tto cxt = map renamePred cxt
+  where
+#if MIN_VERSION_template_haskell(2,10,0)
+    renamePred p = renameType p -- in 2.10.0: type Pred = Type
+#else
+    renamePred (ClassP n tys) = ClassP n (map renameType tys)
+    renamePred (EqualP a b)   = EqualP (renameType a) (renameType b)
+#endif
+    renameType n | n == tfrom = tto
+    renameType (AppT a b)     = AppT (renameType a) (renameType b)
+    renameType (SigT a k)     = SigT (renameType a) k
+    renameType typ            = typ
 
 -- UpdateEvent (\(MyUpdateEvent arg1 arg2) -> myUpdateEvent arg1 arg2)
 makeEventHandler :: Name -> Type -> ExpQ
@@ -318,26 +348,44 @@ makeEventInstance eventName eventType
 
 -- (tyvars, cxt, args, state type, result type, is update)
 analyseType :: Name -> Type -> ([TyVarBndr], Cxt, [Type], Type, Type, Bool)
-analyseType eventName t
-    = let (tyvars, cxt, t') = case t of
-                                ForallT binds [] t' ->
-                                  (binds, [], t')
-                                ForallT binds cxt t' ->
-                                  (binds, cxt, t')
-                                _ -> ([], [], t)
-          args = getArgs t'
-          (stateType, resultType, isUpdate) = findMonad t'
-      in (tyvars, cxt, args, stateType, resultType, isUpdate)
-    where getArgs ForallT{} = error $ "Event has an invalid type signature: Nested forall: " ++ show eventName
-          getArgs (AppT (AppT ArrowT a) b) = a : getArgs b
-          getArgs _ = []
+analyseType eventName t = go [] [] [] t
+  where
+    getMonadReader :: Cxt -> Name -> [(Type, Type)]
+    getMonadReader cxt m = do
+       constraint@(AppT (AppT (ConT c) x) m') <- cxt
+       guard (c == ''MonadReader && m' == VarT m)
+       return (constraint, x)
 
-          findMonad (AppT (AppT ArrowT a) b)
-              = findMonad b
-          findMonad (AppT (AppT (ConT con) state) result)
-              | con == ''Update = (state, result, True)
-              | con == ''Query  = (state, result, False)
-          findMonad _ = error $ "Event has an invalid type signature: Not an Update or a Query: " ++ show eventName
+    getMonadState :: Cxt -> Name -> [(Type, Type)]
+    getMonadState cxt m = do
+       constraint@(AppT (AppT (ConT c) x) m') <- cxt
+       guard (c == ''MonadState && m' == VarT m)
+       return (constraint, x)
+
+    -- a -> b
+    go tyvars cxt args (AppT (AppT ArrowT a) b)
+        = go tyvars cxt (args ++ [a]) b
+    -- Update st res
+    -- Query st res
+    go tyvars cxt args (AppT (AppT (ConT con) state) result)
+        | con == ''Update = (tyvars, cxt, args, state, result, True)
+        | con == ''Query  = (tyvars, cxt, args, state, result, False)
+    -- (...) => a
+    go tyvars cxt args (ForallT tyvars2 cxt2 a)
+        = go (tyvars ++ tyvars2) (cxt ++ cxt2) args a
+    -- (MonadState state m) => ... -> m result
+    -- (MonadReader state m) => ... -> m result
+    go tyvars cxt args (AppT (VarT m) result)
+        | [] <- queries, [(cx, state)] <- updates
+            = (tyvars', delete cx cxt, args, state, result, True)
+        | [(cx, state)] <- queries, [] <- updates
+            = (tyvars', delete cx cxt, args, state, result, False)
+      where
+        queries = getMonadReader cxt m
+        updates = getMonadState cxt m
+        tyvars' = filter ((/= m) . tyVarBndrName) tyvars
+    -- otherwise, fail
+    go _ _ _ _ = error $ "Event has an invalid type signature: Not an Update, Query, MonadState, or MonadReader: " ++ show eventName
 
 -- | find the type variables
 -- | e.g. State a b  ==> [a,b]
