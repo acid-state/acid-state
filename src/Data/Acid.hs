@@ -9,7 +9,7 @@
  AcidState container using a transaction log on disk.
 
  To see how it all fits together, have a look at these example
- <http://mirror.seize.it/acid-state/examples/>.
+ <https://github.com/acid-state/acid-state/tree/master/examples>.
 
 -}
 
