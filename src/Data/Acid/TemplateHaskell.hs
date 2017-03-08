@@ -226,7 +226,9 @@ makeEventHandler eventName eventType
 --  deriving (Typeable)
 makeEventDataType eventName eventType
     = do let con = normalC eventStructName [ strictType notStrict (return arg) | arg <- args ]
-#if MIN_VERSION_template_haskell(2,11,0)
+#if MIN_VERSION_template_haskell(2,12,0)
+             cxt = [derivClause Nothing [conT ''Typeable]]
+#elif MIN_VERSION_template_haskell(2,11,0)
              cxt = mapM conT [''Typeable]
 #else
              cxt = [''Typeable]
