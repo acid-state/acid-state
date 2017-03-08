@@ -46,12 +46,16 @@ import Data.ByteString.Lazy.Char8 as Lazy ( pack, unpack )
 import Data.Serialize                     ( runPutLazy, runGetLazy )
 import Data.SafeCopy                      ( SafeCopy, safeGet, safePut )
 
-import Data.Typeable                      ( Typeable, TypeRep, typeOf )
+import Data.Typeable                      ( Typeable, TypeRep, typeRepTyCon, typeOf )
 import Unsafe.Coerce                      ( unsafeCoerce )
 
-#if MIN_VERSION_base(4,4,0)
+#if MIN_VERSION_base(4,5,0)
+import Data.Typeable                      ( tyConModule )
+#else
+import Data.Typeable.Internal             ( tyConModule )
+#endif
 
-import Data.Typeable.Internal             ( TypeRep (..), tyConModule )
+#if MIN_VERSION_base(4,4,0)
 
 -- in base >= 4.4 the Show instance for TypeRep no longer provides a
 -- fully qualified name. But we have old data around that expects the
@@ -60,12 +64,7 @@ import Data.Typeable.Internal             ( TypeRep (..), tyConModule )
 -- end-of-life anyway.
 showQualifiedTypeRep :: TypeRep -> String
 showQualifiedTypeRep tr = tyConModule con ++ "." ++ show tr
-  where con = extractTypeRepCon tr
-#if MIN_VERSION_base(4,8,0)
-        extractTypeRepCon (TypeRep _ c _ _) = c
-#else
-        extractTypeRepCon (TypeRep _ c _) = c
-#endif
+  where con = typeRepTyCon tr
 
 #else
 
