@@ -297,7 +297,7 @@ cutFileLog fLog = do
 newestEntry :: SafeCopy object => LogKey object -> IO (Maybe object)
 newestEntry identifier = do
   logFiles <- findLogFiles identifier
-  let sorted = reverse $ sort logFiles
+  let sorted = sortBy (flip compare) logFiles
       (_eventIds, files) = unzip sorted
   worker files
  where

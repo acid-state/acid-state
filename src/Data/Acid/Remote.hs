@@ -101,7 +101,7 @@ import Control.Exception                             ( AsyncException(ThreadKill
                                                      , Exception(fromException), IOException, Handler(..)
                                                      , SomeException, catch, catches, throw )
 import Control.Exception                             ( throwIO, finally )
-import Control.Monad                                 ( forever, liftM, join, when )
+import Control.Monad                                 ( forever, liftM, join, when, unless )
 import Control.Concurrent                            ( ThreadId, forkIO, threadDelay, killThread, myThreadId )
 import Control.Concurrent.MVar                       ( MVar, newEmptyMVar, putMVar, takeMVar )
 import Control.Concurrent.Chan                       ( newChan, readChan, writeChan )
@@ -203,9 +203,7 @@ sharedSecretPerform :: Strict.ByteString -- ^ shared secret
 sharedSecretPerform pw cc =
     do ccPut cc pw
        r <- ccGetSome cc 1024
-       if r == (pack "OK")
-          then return ()
-          else throwIO (AuthenticationError "shared secret authentication failed.")
+       unless (r == (pack "OK")) $ throwIO (AuthenticationError "shared secret authentication failed.")
 
 {- | Accept connections on @port@ and handle requests using the given 'AcidState'.
      This call doesn't return.
@@ -257,7 +255,7 @@ acidServer' checkAuth listenSocket acidState
        infi
     where
       logError :: (Show e) => e -> IO ()
-      logError e = hPrint stderr e
+      logError = hPrint stderr
 
       isResourceVanishedError :: IOException -> Bool
       isResourceVanishedError = isResourceVanishedType . ioeGetErrorType
@@ -324,10 +322,7 @@ process CommChannel{..} acidState
           = case inp of
               Fail msg _    -> throwIO (SerializeError msg)
               Partial cont  -> do bs <- ccGetSome 1024
-                                  if Strict.null bs then
-                                     return ()
-                                  else
-                                     worker chan (cont bs)
+                                  unless (Strict.null bs) $ worker chan (cont bs)
               Done cmd rest -> do processCommand chan cmd; worker chan (runGetPartial get rest)
         processCommand chan cmd =
           case cmd of
