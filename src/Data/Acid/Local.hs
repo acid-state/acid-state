@@ -330,7 +330,7 @@ closeLocalState acidState
          closeFileLog (localCheckpoints acidState)
          releasePrefixLock (localLock acidState)
 
-createLocalArchive :: LocalState st -> IO ()
+createLocalArchive :: SafeCopy st => LocalState st -> IO ()
 createLocalArchive state
   = do -- We need to look at the last checkpoint saved to disk. Since checkpoints can be written
        -- in parallel with this call, we can't guarantee that the checkpoint we get really is the
@@ -349,6 +349,12 @@ createLocalArchive state
                  -- In the same style as above, we archive all log files that came before the log file
                  -- which contains our checkpoint.
                  archiveFileLog (localCheckpoints state) durableCheckpointId
+       -- If a checkpoint is created just before 'createArchive' is called, the
+       -- last checkpoint file is empty, which corrupts the restoration of the
+       -- state when the 'openLocalState' functions are thereafter called.
+       -- To avoid this, we call 'createLocalCheckpoint' in order to push a new
+       -- log entry.
+       createLocalCheckpoint state
 
 toAcidState :: IsAcidic st => LocalState st -> AcidState st
 toAcidState local
