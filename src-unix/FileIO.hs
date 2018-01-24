@@ -1,4 +1,5 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE CPP #-}
 module FileIO(FHandle,open,write,flush,close,obtainPrefixLock,releasePrefixLock,PrefixLock) where
 import System.Posix(Fd(Fd),
                     openFd,
@@ -21,10 +22,20 @@ import System.Posix.Process (getProcessID)
 import System.Posix.Signals (nullSignal, signalProcess)
 import System.Posix.Types (ProcessID)
 import Control.Exception.Extensible as E
-import System.Directory         ( createDirectoryIfMissing, removeFile)
+import System.Directory         ( createDirectoryIfMissing, removeFile, canonicalizePath)
 import System.FilePath
 
+#if defined(USE_UNIX_SOCKET_AS_LOCK)
+import Network.Socket hiding (close)
+import qualified Network.Socket as Socket (close)
+#else
+#endif
+
+#if defined(USE_UNIX_SOCKET_AS_LOCK)
+newtype PrefixLock = PrefixLock Socket
+#else
 newtype PrefixLock = PrefixLock FilePath
+#endif
 
 data FHandle = FHandle Fd
 
@@ -50,8 +61,33 @@ close (FHandle fd) = closeFd fd
 --    fdToHandle =<< openFd fp ReadWrite (Just 0o600) flags
 --    where flags = defaultFileFlags {exclusive = True, trunc = True}
 
+#if defined(USE_UNIX_SOCKET_AS_LOCK)
 
+obtainPrefixLock :: FilePath -> IO PrefixLock
+obtainPrefixLock prefix = do
+    sock <- socket AF_UNIX Datagram defaultProtocol
+    -- Create a unix socket in the abstract namespace.
+    -- This is non portable and works only on Linux, 
+    -- but we have the guarantee that both close()
+    -- and the process dying will release it, without
+    -- a need for a manual unlink()
+    -- The name of the socket must be unique, hence we take
+    -- the full absolute path of the directory we want to lock
+    absPrefix <- canonicalizePath prefix
+    let fp = "\0" ++ absPrefix ++ ".lock"
+    let handler :: IOException -> IO ()
+        handler _ = throw (userError "Locked")
+    catch (bind sock (SockAddrUnix fp)) handler
+    return (PrefixLock sock)
 
+-- |Reliquish the lock by closing the socket.
+releasePrefixLock :: PrefixLock -> IO ()
+releasePrefixLock (PrefixLock sock) =
+    catch (Socket.close sock) handler
+    where handler :: IOException -> IO ()
+          handler e = return ()
+
+#else
 
 obtainPrefixLock :: FilePath -> IO PrefixLock
 obtainPrefixLock prefix = do
@@ -149,5 +185,7 @@ releasePrefixLock (PrefixLock fp) =
       checkDrop e | SE.isDoesNotExistError e = return ()
                   | True = throw e
 
+#endif
 
 
+ 
