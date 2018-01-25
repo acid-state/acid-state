@@ -1,5 +1,5 @@
 Name:                acid-state
-Version:             0.14.3
+Version:             0.14.4
 Synopsis:            Add ACID guarantees to any serializable Haskell data structure.
 Description:         Use regular Haskell data structures as your database and get stronger ACID guarantees than most RDBMS offer.
 Homepage:            https://github.com/acid-state/acid-state
@@ -21,6 +21,10 @@ Extra-source-files:
 Source-repository head
   type:          git
   location:      https://github.com/acid-state/acid-state
+
+Flag Socket
+  Description:   Use unix sockets as a lock
+  Default:       False
 
 Library
   Exposed-Modules:     Data.Acid,
@@ -60,6 +64,9 @@ Library
   else
      Hs-Source-Dirs:   src-unix/
 
+  if flag(socket)
+     cpp-options:      -DUSE_UNIX_SOCKET_AS_LOCK
+
   default-language:    Haskell2010
   GHC-Options:         -fwarn-unused-imports -fwarn-unused-binds
 
@@ -78,7 +85,7 @@ benchmark loading-benchmark
     Benchmark.Prelude
   build-depends:
     random,
-    directory,
+    directory >= 1.2.2,
     system-fileio == 0.3.*,
     system-filepath,
     criterion >= 0.8 && < 1.2,
