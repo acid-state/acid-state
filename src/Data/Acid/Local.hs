@@ -30,22 +30,21 @@ import Data.Acid.Common
 import Data.Acid.Abstract
 
 import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar )
-import Control.Exception              ( onException, evaluate )
+import Control.Exception              ( onException, evaluate, Exception, throwIO )
 import Control.Monad.State            ( runState )
 import Control.Monad                  ( join )
 import Control.Applicative            ( (<$>), (<*>) )
 import Data.ByteString.Lazy           ( ByteString )
 import qualified Data.ByteString.Lazy as Lazy ( length )
 
-
 import Data.Serialize                 ( runPutLazy, runGetLazy )
 import Data.SafeCopy                  ( SafeCopy(..), safeGet, safePut
                                       , primitive, contain )
 import Data.Typeable                  ( Typeable, typeOf )
 import Data.IORef
-import System.FilePath                ( (</>) )
-
-import FileIO                         ( obtainPrefixLock, releasePrefixLock, PrefixLock )
+import System.FilePath                ( (</>), takeDirectory )
+import System.FileLock
+import System.Directory               ( createDirectoryIfMissing )
 
 
 {-| State container offering full ACID (Atomicity, Consistency, Isolation and Durability)
@@ -66,9 +65,12 @@ data LocalState st
                  , localCopy        :: IORef st
                  , localEvents      :: FileLog (Tagged ByteString)
                  , localCheckpoints :: FileLog Checkpoint
-                 , localLock        :: PrefixLock
+                 , localLock        :: FileLock
                  } deriving (Typeable)
 
+newtype StateIsLocked = StateIsLocked FilePath deriving (Show, Typeable)
+
+instance Exception StateIsLocked
 
 -- | Issue an Update event and return immediately. The event is not durable
 --   before the MVar has been filled but the order of events is honored.
@@ -201,7 +203,7 @@ createCheckpointAndClose abstract_state
          takeMVar mvar
          closeFileLog (localEvents acidState)
          closeFileLog (localCheckpoints acidState)
-         releasePrefixLock (localLock acidState)
+         unlockFile (localLock acidState)
   where acidState = downcast abstract_state
 
 
@@ -278,11 +280,11 @@ resumeLocalStateFrom directory initialState delayLocking =
     True -> do
       (n, st) <- loadCheckpoint
       return $ do
-        lock  <- obtainPrefixLock lockFile
+        lock  <- maybeLockFile lockFile
         replayEvents lock n st
     False -> do
-      lock    <- obtainPrefixLock lockFile
-      (n, st) <- loadCheckpoint `onException` releasePrefixLock lock
+      lock    <- maybeLockFile lockFile
+      (n, st) <- loadCheckpoint `onException` unlockFile lock
       return $ do
         replayEvents lock n st
   where
@@ -317,9 +319,15 @@ resumeLocalStateFrom directory initialState delayLocking =
                                       , localCheckpoints = checkpointsLog
                                       , localLock = lock
                                       }
+    maybeLockFile path = do
+      createDirectoryIfMissing True (takeDirectory path)
+      maybe (throwIO (StateIsLocked path))
+                            pure =<< tryLockFile path Exclusive
+
 
 checkpointRestoreError msg
     = error $ "Could not parse saved checkpoint due to the following error: " ++ msg
+
 
 -- | Close an AcidState and associated logs.
 --   Any subsequent usage of the AcidState will throw an exception.
@@ -328,7 +336,7 @@ closeLocalState acidState
     = do closeCore (localCore acidState)
          closeFileLog (localEvents acidState)
          closeFileLog (localCheckpoints acidState)
-         releasePrefixLock (localLock acidState)
+         unlockFile (localLock acidState)
 
 createLocalArchive :: LocalState st -> IO ()
 createLocalArchive state
@@ -361,4 +369,3 @@ toAcidState local
               , closeAcidState = closeLocalState local
               , acidSubState = mkAnyState local
               }
-
