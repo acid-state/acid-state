@@ -322,7 +322,7 @@ resumeLocalStateFrom directory initialState delayLocking =
     maybeLockFile path = do
       createDirectoryIfMissing True (takeDirectory path)
       maybe (throwIO (StateIsLocked path))
-                            pure =<< tryLockFile path Exclusive
+                            return =<< tryLockFile path Exclusive
 
 
 checkpointRestoreError msg
