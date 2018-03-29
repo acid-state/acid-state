@@ -1,5 +1,5 @@
 Name:                acid-state
-Version:             0.14.3
+Version:             0.15.0
 Synopsis:            Add ACID guarantees to any serializable Haskell data structure.
 Description:         Use regular Haskell data structures as your database and get stronger ACID guarantees than most RDBMS offer.
 Homepage:            https://github.com/acid-state/acid-state
@@ -10,7 +10,7 @@ Maintainer:          Lemmih <lemmih@gmail.com>
 Category:            Database
 Build-type:          Simple
 Cabal-version:       >=1.10
-tested-with:         GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3, GHC == 8.0.1
+tested-with:         GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3, GHC == 8.0.1, GHC == 8.2.2, GHC == 8.4.1
 Extra-source-files:
         CHANGELOG.md
         examples/*.hs
