@@ -43,6 +43,7 @@ Library
                        safecopy >= 0.6,
                        stm >= 2.4,
                        directory,
+                       filelock,
                        filepath,
                        mtl,
                        network,
