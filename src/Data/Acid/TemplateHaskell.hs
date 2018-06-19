@@ -350,6 +350,7 @@ makeEventInstance eventName eventType
 analyseType :: Name -> Type -> ([TyVarBndr], Cxt, [Type], Type, Type, Bool)
 analyseType eventName t = go [] [] [] t
   where
+#if MIN_VERSION_template_haskell(2,10,0)
     getMonadReader :: Cxt -> Name -> [(Type, Type)]
     getMonadReader cxt m = do
        constraint@(AppT (AppT (ConT c) x) m') <- cxt
@@ -361,6 +362,19 @@ analyseType eventName t = go [] [] [] t
        constraint@(AppT (AppT (ConT c) x) m') <- cxt
        guard (c == ''MonadState && m' == VarT m)
        return (constraint, x)
+#else
+    getMonadReader :: Cxt -> Name -> [(Pred, Type)]
+    getMonadReader cxt m = do
+       constraint@(ClassP c [x, m']) <- cxt
+       guard (c == ''MonadReader && m' == VarT m)
+       return (constraint, x)
+
+    getMonadState :: Cxt -> Name -> [(Pred, Type)]
+    getMonadState cxt m = do
+       constraint@(ClassP c [x, m']) <- cxt
+       guard (c == ''MonadState && m' == VarT m)
+       return (constraint, x)
+#endif
 
     -- a -> b
     go tyvars cxt args (AppT (AppT ArrowT a) b)
