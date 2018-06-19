@@ -1,8 +1,6 @@
 {-# LANGUAGE TemplateHaskell, CPP #-}
 {- Holy crap this code is messy. -}
-module Data.Acid.TemplateHaskell
-    ( makeAcidic
-    ) where
+module Data.Acid.TemplateHaskell where
 
 import Language.Haskell.TH
 import Language.Haskell.TH.Ppr
@@ -344,7 +342,6 @@ makeEventInstance eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
-
 
 -- (tyvars, cxt, args, state type, result type, is update)
 analyseType :: Name -> Type -> ([TyVarBndr], Cxt, [Type], Type, Type, Bool)
