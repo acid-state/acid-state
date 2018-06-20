@@ -8,17 +8,44 @@ module Data.Acid.TemplateHaskellSpec where
 
 import Test.Hspec hiding (context)
 
-import Data.Acid
-import Data.Acid.TemplateHaskell
+import Data.SafeCopy (SafeCopy)
+import Data.Typeable (Typeable)
+import Control.DeepSeq (force)
+import Control.Exception (evaluate)
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
 import Control.Monad.Reader
 import Control.Monad.State
 
+import Data.Acid
+import Data.Acid.TemplateHaskell
+
 spec :: Spec
 spec = do
+    let name = mkName "foo"
+        nameT = ConT name
+        upperName = mkName "Foo"
+        upperNameT = ConT upperName
+
+    describe "makeEventInstance" $ do
+        it "works with monomorphic types" $ do
+            eventType <- runQ [t| Int -> Query Char () |]
+            makeEventInstance name eventType
+                `quoteShouldBe`
+                    [d| instance QueryEvent $(return upperNameT) |]
+
+        it "requires instances on polymorphic types" $ do
+            let a = VarT (mkName "a")
+                a' = return a
+            eventType <- runQ [t| (Ord $(a')) => $(a') -> Update Char $(a') |]
+
+            makeEventInstance name eventType
+                `quoteShouldBe`
+                    [d| instance (Ord $(a')) => UpdateEvent $(return upperNameT)
+                    |]
+
+
     describe "analyseType" $ do
-        let name = mkName "foo"
         it "can work with the Query type" $ do
             typ <- runQ [t| Int -> Query String Char |]
 
@@ -65,3 +92,45 @@ spec = do
                     , resultType = VarT m `AppT` TupleT 0
                     , isUpdate = False
                     }
+
+    describe "eventCxts" $ do
+        let binders = []
+            stateType = ConT ''Char
+        it "rejects types with constrainted type variables unknown to state" $ do
+            let predicate eventType =
+                    evaluate
+                        . force
+                        . map show
+                        $ eventCxts stateType binders name eventType
+            eventType <- runQ [t| (Ord a) => Int -> Query Char a |]
+
+            predicate eventType
+                `shouldThrow`
+                    anyErrorCall
+
+        it "accepts types with unconstrained type variables" $ do
+            eventType <- runQ [t| forall a. Int -> Query Char a |]
+
+            eventCxts stateType binders name eventType
+                `shouldBe`
+                    []
+
+        it "accepts constrained type variables in the state" $ do
+            let binders = [PlainTV (mkName "x")]
+                x = mkName "x"
+                stateType = ConT ''Maybe `AppT` VarT x
+            eventType <- runQ [t| (Ord a) => Int -> Query [a] Int|]
+
+            eventCxts stateType binders name eventType
+                `shouldBe`
+#if MIN_VERSION_template_haskell(2,10,0)
+                    [ConT ''Ord `AppT` VarT x]
+#else
+                    [ClassP ''Ord [VarT x]]
+#endif
+
+quoteShouldBe :: (Eq a, Show a) => Q a -> Q [a] -> Expectation
+quoteShouldBe qa qb = do
+    actual <- runQ qa
+    [expected] <- runQ qb
+    actual `shouldBe` expected

@@ -249,10 +249,9 @@ makeEventHandler eventName eventType
                       , pprint stateType
                       ]
 
-
-
 --data MyUpdateEvent = MyUpdateEvent Arg1 Arg2
 --  deriving (Typeable)
+makeEventDataType :: Name -> Type -> DecQ
 makeEventDataType eventName eventType
     = do let con = normalC eventStructName [ strictType notStrict (return arg) | arg <- args ]
 #if MIN_VERSION_template_haskell(2,12,0)
@@ -311,20 +310,31 @@ instance (SafeCopy key, Typeable key
   type MethodResult (MyUpdateEvent key val) = Return
   type MethodState (MyUpdateEvent key val) = State key val
 -}
-makeMethodInstance eventName eventType
-    = do let preds = [ ''SafeCopy, ''Typeable ]
-             ty = AppT (ConT ''Method) (foldl AppT (ConT eventStructName) (map VarT (allTyVarBndrNames tyvars)))
-             structType = foldl appT (conT eventStructName) (map varT (allTyVarBndrNames tyvars))
-         instanceD (cxt $ [ classP classPred [varT tyvar] | tyvar <- allTyVarBndrNames tyvars, classPred <- preds ] ++ map return context)
-                   (return ty)
+makeMethodInstance eventName eventType = do
+    let preds =
+            [ ''SafeCopy, ''Typeable ]
+        ty =
+            AppT (ConT ''Method) (foldl AppT (ConT eventStructName) (map VarT (allTyVarBndrNames tyvars)))
+        structType =
+            foldl appT (conT eventStructName) (map varT (allTyVarBndrNames tyvars))
+        instanceContext  =
+            cxt $
+                [ classP classPred [varT tyvar]
+                | tyvar <- allTyVarBndrNames tyvars
+                , classPred <- preds
+                ]
+                ++ map return context
+    instanceD
+        instanceContext
+        (return ty)
 #if __GLASGOW_HASKELL__ >= 707
-                   [ tySynInstD ''MethodResult (tySynEqn [structType] (return resultType))
-                   , tySynInstD ''MethodState  (tySynEqn [structType] (return stateType))
+        [ tySynInstD ''MethodResult (tySynEqn [structType] (return resultType))
+        , tySynInstD ''MethodState  (tySynEqn [structType] (return stateType))
 #else
-                   [ tySynInstD ''MethodResult [structType] (return resultType)
-                   , tySynInstD ''MethodState  [structType] (return stateType)
+        [ tySynInstD ''MethodResult [structType] (return resultType)
+        , tySynInstD ''MethodState  [structType] (return stateType)
 #endif
-                   ]
+        ]
     where TypeAnalysis { tyvars, context, stateType, resultType } = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
@@ -332,6 +342,7 @@ makeMethodInstance eventName eventType
 
 --instance (SafeCopy key, Typeable key
 --         ,SafeCopy val, Typeable val) => UpdateEvent (MyUpdateEvent key val)
+makeEventInstance :: Name -> Type -> DecQ
 makeEventInstance eventName eventType
     = do let preds = [ ''SafeCopy, ''Typeable ]
              eventClass = if isUpdate then ''UpdateEvent else ''QueryEvent
