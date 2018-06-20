@@ -114,12 +114,12 @@ spec = do
             eventCxts stateType binders name eventType
                 `shouldBe`
                     []
+        let x = mkName "x"
 
         it "accepts constrained type variables in the state" $ do
             let binders = [PlainTV (mkName "x")]
-                x = mkName "x"
                 stateType = ConT ''Maybe `AppT` VarT x
-            eventType <- runQ [t| (Ord a) => Int -> Query [a] Int|]
+            eventType <- runQ [t| (Ord a) => Int -> Query (Maybe a) Int|]
 
             eventCxts stateType binders name eventType
                 `shouldBe`
@@ -128,6 +128,17 @@ spec = do
 #else
                     [ClassP ''Ord [VarT x]]
 #endif
+
+        it "can rename a polymorphic state" $ do
+            eventType <- runQ [t| (MonadReader r m, Ord r) => Int -> m Char |]
+            eventCxts stateType binders name eventType
+                `shouldBe`
+#if MIN_VERSION_template_haskell(2,10,0)
+                    [ConT ''Ord `AppT` ConT ''Char]
+#else
+                    [ClassP ''Ord [ConT ''Char]]
+#endif
+
 
 quoteShouldBe :: (Eq a, Show a) => Q a -> Q [a] -> Expectation
 quoteShouldBe qa qb = do
