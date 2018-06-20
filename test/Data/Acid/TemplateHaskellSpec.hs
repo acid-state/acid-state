@@ -1,4 +1,6 @@
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -42,7 +44,7 @@ spec = do
                     , isUpdate = False
                     }
 
-        it "can work with many type variables" $ do
+        it "can work with many type variables (note that eventCxts later rejects this)" $ do
             let m = mkName "m"
             typ <- runQ [t| (MonadReader Int $(varT m)) => Int -> Query Int ($(varT m) ()) |]
             analyseType name typ
