@@ -353,19 +353,8 @@ data TypeAnalysis = TypeAnalysis
     , isUpdate :: Bool
     } deriving (Eq, Show)
 
-analysisFromTuple :: ([TyVarBndr], Cxt, [Type], Type, Type, Bool) -> TypeAnalysis
-analysisFromTuple (t, c, a, s, r, i) = TypeAnalysis
-    { tyvars = t
-    , context = c
-    , argumentTypes = a
-    , stateType = s
-    , resultType = r
-    , isUpdate = i
-    }
-
--- (tyvars, cxt, args, state type, result type, is update)
 analyseType :: Name -> Type -> TypeAnalysis
-analyseType eventName t = analysisFromTuple $ go [] [] [] t
+analyseType eventName t = go [] [] [] t
   where
 #if MIN_VERSION_template_haskell(2,10,0)
     getMonadReader :: Cxt -> Name -> [(Type, Type)]
@@ -398,23 +387,40 @@ analyseType eventName t = analysisFromTuple $ go [] [] [] t
         = go tyvars cxt (args ++ [a]) b
     -- Update st res
     -- Query st res
-    go tyvars cxt args (AppT (AppT (ConT con) state) result)
-        | con == ''Update = (tyvars, cxt, args, state, result, True)
-        | con == ''Query  = (tyvars, cxt, args, state, result, False)
+    go tyvars context argumentTypes (AppT (AppT (ConT con) stateType) resultType)
+        | con == ''Update =
+            TypeAnalysis
+                { tyvars, context, argumentTypes, stateType, resultType
+                , isUpdate = True
+                }
+        | con == ''Query  =
+            TypeAnalysis
+                { tyvars, context, argumentTypes, stateType, resultType
+                , isUpdate = False
+                }
     -- (...) => a
     go tyvars cxt args (ForallT tyvars2 cxt2 a)
         = go (tyvars ++ tyvars2) (cxt ++ cxt2) args a
     -- (MonadState state m) => ... -> m result
     -- (MonadReader state m) => ... -> m result
-    go tyvars cxt args (AppT (VarT m) result)
-        | [] <- queries, [(cx, state)] <- updates
-            = (tyvars', delete cx cxt, args, state, result, True)
-        | [(cx, state)] <- queries, [] <- updates
-            = (tyvars', delete cx cxt, args, state, result, False)
+    go tyvars' cxt argumentTypes (AppT (VarT m) resultType)
+        | [] <- queries, [(cx, stateType)] <- updates
+            = TypeAnalysis
+                { tyvars,  argumentTypes , stateType, resultType
+                , isUpdate = False
+                , context = delete cx cxt
+                }
+
+        | [(cx, stateType)] <- queries, [] <- updates
+            = TypeAnalysis
+                { tyvars,  argumentTypes , stateType, resultType
+                , isUpdate = False
+                , context = delete cx cxt
+                }
       where
         queries = getMonadReader cxt m
         updates = getMonadState cxt m
-        tyvars' = filter ((/= m) . tyVarBndrName) tyvars
+        tyvars = filter ((/= m) . tyVarBndrName) tyvars'
     -- otherwise, fail
     go _ _ _ _ = error $ "Event has an invalid type signature: Not an Update, Query, MonadState, or MonadReader: " ++ show eventName
 
