@@ -1,4 +1,5 @@
-{-# LANGUAGE TemplateHaskell, CPP #-}
+{-# LANGUAGE TemplateHaskell, CPP, NamedFieldPuns #-}
+
 {- Holy crap this code is messy. -}
 module Data.Acid.TemplateHaskell where
 
@@ -155,7 +156,7 @@ eventCxts :: Type        -- ^ State type
           -> Type        -- ^ 'Type' of the event
           -> [Pred]      -- ^ extra context to add to 'IsAcidic' instance
 eventCxts targetStateType targetTyVars eventName eventType =
-    let (_tyvars, cxt, _args, stateType, _resultType, _isUpdate)
+    let TypeAnalysis { context = cxt, stateType }
                     = analyseType eventName eventType
         -- find the type variable names that this event is using
         -- for the State type
@@ -227,7 +228,7 @@ makeEventHandler eventName eventType
          let lamClause = conP eventStructName [varP var | var <- vars ]
          conE constr `appE` lamE [lamClause] (foldl appE (varE eventName) (map varE vars))
     where constr = if isUpdate then 'UpdateEvent else 'QueryEvent
-          (tyvars, _cxt, args, stateType, _resultType, isUpdate) = analyseType eventName eventType
+          TypeAnalysis { tyvars, argumentTypes = args, stateType, isUpdate } = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
@@ -269,7 +270,7 @@ makeEventDataType eventName eventType
           [_] -> newtypeD (return []) eventStructName tyvars con cxt
           _   -> dataD (return []) eventStructName tyvars [con] cxt
 #endif
-    where (tyvars, _cxt, args, _stateType, _resultType, _isUpdate) = analyseType eventName eventType
+    where TypeAnalysis { tyvars, argumentTypes = args } = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
@@ -295,7 +296,7 @@ makeSafeCopyInstance eventName eventType
                    [ funD 'putCopy [clause [putClause] (normalB (contained putExp)) []]
                    , valD (varP 'getCopy) (normalB (contained getArgs)) []
                    ]
-    where (tyvars, context, args, _stateType, _resultType, _isUpdate) = analyseType eventName eventType
+    where TypeAnalysis { tyvars, context, argumentTypes = args } = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
@@ -324,7 +325,7 @@ makeMethodInstance eventName eventType
                    , tySynInstD ''MethodState  [structType] (return stateType)
 #endif
                    ]
-    where (tyvars, context, _args, stateType, resultType, _isUpdate) = analyseType eventName eventType
+    where TypeAnalysis { tyvars, context, stateType, resultType } = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
@@ -338,14 +339,33 @@ makeEventInstance eventName eventType
          instanceD (cxt $ [ classP classPred [varT tyvar] | tyvar <- allTyVarBndrNames tyvars, classPred <- preds ] ++ map return context)
                    (return ty)
                    []
-    where (tyvars, context, _args, _stateType, _resultType, isUpdate) = analyseType eventName eventType
+    where TypeAnalysis { tyvars, context, isUpdate } = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
 
+data TypeAnalysis = TypeAnalysis
+    { tyvars :: [TyVarBndr]
+    , context :: Cxt
+    , argumentTypes :: [Type]
+    , stateType :: Type
+    , resultType :: Type
+    , isUpdate :: Bool
+    } deriving (Eq, Show)
+
+analysisFromTuple :: ([TyVarBndr], Cxt, [Type], Type, Type, Bool) -> TypeAnalysis
+analysisFromTuple (t, c, a, s, r, i) = TypeAnalysis
+    { tyvars = t
+    , context = c
+    , argumentTypes = a
+    , stateType = s
+    , resultType = r
+    , isUpdate = i
+    }
+
 -- (tyvars, cxt, args, state type, result type, is update)
-analyseType :: Name -> Type -> ([TyVarBndr], Cxt, [Type], Type, Type, Bool)
-analyseType eventName t = go [] [] [] t
+analyseType :: Name -> Type -> TypeAnalysis
+analyseType eventName t = analysisFromTuple $ go [] [] [] t
   where
 #if MIN_VERSION_template_haskell(2,10,0)
     getMonadReader :: Cxt -> Name -> [(Type, Type)]
