@@ -1,7 +1,7 @@
 packages:
     - .
 
-resolver: lts-2.22
+resolver: lts-11.15
 
 extra-deps:
     - filelock-0.1.0.1

@@ -60,7 +60,7 @@ spec = do
                     }
 
         it "can work with MonadReader" $ do
-            typ <- runQ [t| (MonadReader Int m) => Int -> m () |]
+            typ <- runQ [t| forall m. (MonadReader Int m) => Int -> m () |]
             analyseType name typ
                 `shouldBe` TypeAnalysis
                     { tyvars = []
@@ -102,7 +102,7 @@ spec = do
                         . force
                         . map show
                         $ eventCxts stateType binders name eventType
-            eventType <- runQ [t| (Ord a) => Int -> Query Char a |]
+            eventType <- runQ [t| forall a. (Ord a) => Int -> Query Char a |]
 
             predicate eventType
                 `shouldThrow`
@@ -119,7 +119,7 @@ spec = do
         it "accepts constrained type variables in the state" $ do
             let binders = [PlainTV (mkName "x")]
                 stateType = ConT ''Maybe `AppT` VarT x
-            eventType <- runQ [t| (Ord a) => Int -> Query (Maybe a) Int|]
+            eventType <- runQ [t| forall a. (Ord a) => Int -> Query (Maybe a) Int|]
 
             eventCxts stateType binders name eventType
                 `shouldBe`
@@ -130,7 +130,7 @@ spec = do
 #endif
 
         it "can rename a polymorphic state" $ do
-            eventType <- runQ [t| (MonadReader r m, Ord r) => Int -> m Char |]
+            eventType <- runQ [t| forall r m. (MonadReader r m, Ord r) => Int -> m Char |]
             eventCxts stateType binders name eventType
                 `shouldBe`
 #if MIN_VERSION_template_haskell(2,10,0)
