@@ -36,7 +36,7 @@ Library
                        Data.Acid.Common, FileIO
 
   Build-depends:       array,
-                       base >= 4 && < 5,
+                       base >= 4.5.1.0 && < 5,
                        bytestring >= 0.10.2,
                        cereal >= 0.4.1.0,
                        containers,
