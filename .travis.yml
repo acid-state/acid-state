@@ -29,7 +29,7 @@ before_cache:
 matrix:
   include:
     - compiler: "ghc-7.6.3"
-      env: NOINSTALLEDCONSTRAINTS=true
+      env: INSTALLED=false
       addons: {apt: {packages: [ghc-ppa-tools,cabal-install-head,ghc-7.6.3], sources: [hvr-ghc]}}
     - compiler: "ghc-7.8.4"
     # env: TEST=--disable-tests BENCH=--disable-benchmarks
