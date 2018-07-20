@@ -84,6 +84,6 @@ instance Method QueryState where
 instance QueryEvent QueryState
 
 instance IsAcidic StressState where
-    acidEvents = [ UpdateEvent (\PokeState -> pokeState)
-                 , QueryEvent (\QueryState -> queryState)
+    acidEvents = [ UpdateEvent (\PokeState -> pokeState)  safeCopyMethodSerialiser
+                 , QueryEvent (\QueryState -> queryState) safeCopyMethodSerialiser
                  ]

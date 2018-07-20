@@ -24,8 +24,6 @@ import Data.ByteString.Lazy           ( ByteString )
 import Data.Typeable                  ( Typeable )
 import Data.IORef                     ( IORef, newIORef, readIORef, writeIORef )
 
-import Data.SafeCopy                  ( SafeCopy(..) )
-
 
 {-| State container offering full ACID (Atomicity, Consistency, Isolation and Durability)
     guarantees.
@@ -103,12 +101,12 @@ memoryQueryCold acidState event
     where coldMethod = lookupColdMethod (localCore acidState) event
 
 -- | This is a nop with the memory backend.
-createMemoryCheckpoint :: SafeCopy st => MemoryState st -> IO ()
+createMemoryCheckpoint :: MemoryState st -> IO ()
 createMemoryCheckpoint acidState
     = return ()
 
 -- | This is a nop with the memory backend.
-createMemoryArchive :: SafeCopy st => MemoryState st -> IO ()
+createMemoryArchive :: MemoryState st -> IO ()
 createMemoryArchive acidState
     = return ()
 

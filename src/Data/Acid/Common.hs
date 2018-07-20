@@ -15,24 +15,13 @@ import Data.Acid.Core
 
 import Control.Monad.State
 import Control.Monad.Reader
-import Data.ByteString.Lazy  ( ByteString )
-import Data.SafeCopy
-import Data.Serialize        ( Get, runGet, runGetLazy )
 import Control.Applicative
-import qualified Data.ByteString as Strict
 
--- Silly fix for bug in cereal-0.3.3.0's version of runGetLazy.
-runGetLazyFix :: Get a
-           -> ByteString
-           -> Either String a
-runGetLazyFix getter inp
-  = case runGet getter Strict.empty of
-      Left _msg  -> runGetLazy getter inp
-      Right val -> Right val
 
-class (SafeCopy st) => IsAcidic st where
+class IsAcidic st where
     acidEvents :: [Event st]
       -- ^ List of events capable of updating or querying the state.
+
 
 -- | Context monad for Update events.
 newtype Update st a = Update { unUpdate :: State st a }
@@ -72,8 +61,9 @@ type EventState ev = MethodState ev
 --   QueryEvents are executed in a MonadReader context and obviously do not have
 --   to be serialized to disk.
 data Event st where
-    UpdateEvent :: UpdateEvent ev => (ev -> Update (EventState ev) (EventResult ev)) -> Event (EventState ev)
-    QueryEvent  :: QueryEvent  ev => (ev -> Query (EventState ev) (EventResult ev)) -> Event (EventState ev)
+    UpdateEvent :: UpdateEvent ev => (ev -> Update (EventState ev) (EventResult ev)) -> MethodSerialiser ev -> Event (EventState ev)
+    QueryEvent  :: QueryEvent  ev => (ev -> Query (EventState ev) (EventResult ev)) -> MethodSerialiser ev -> Event (EventState ev)
+
 
 -- | All UpdateEvents are also Methods.
 class Method ev => UpdateEvent ev
@@ -84,8 +74,7 @@ class Method ev => QueryEvent ev
 eventsToMethods :: [Event st] -> [MethodContainer st]
 eventsToMethods = map worker
     where worker :: Event st -> MethodContainer st
-          worker (UpdateEvent fn) = Method (unUpdate . fn)
-          worker (QueryEvent fn)  = Method (\ev -> do st <- get
-                                                      return (runReader (unQuery $ fn ev) st)
-                                           )
-
+          worker (UpdateEvent fn ms) = Method (unUpdate . fn) ms
+          worker (QueryEvent  fn ms) = Method (\ev -> do st <- get
+                                                         return (runReader (unQuery $ fn ev) st)
+                                              ) ms

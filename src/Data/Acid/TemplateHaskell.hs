@@ -44,7 +44,37 @@ data MyQuery  = MyQuery Argument
 
 -}
 makeAcidic :: Name -> [Name] -> Q [Dec]
-makeAcidic stateName eventNames
+makeAcidic = makeAcidicWithSerialiser safeCopySerialiserSpec
+
+
+-- | Specifies how to customise the 'IsAcidic' instance and event data
+-- type serialisation instances for a particular serialisation layer.
+data SerialiserSpec =
+    SerialiserSpec
+        { serialisationClassName :: Name
+          -- ^ Class for serialisable types, e.g. @''Safecopy@.
+        , methodSerialiserName :: Name
+          -- ^ Name of the 'MethodSerialiser' to use in the list of
+          -- events in the 'IsAcidic' instance.
+        , makeEventSerialiser :: Name -> Type -> DecQ
+          -- ^ Function to generate an instance of the class named by
+          -- 'serialisationClassName', given the event name and its type.
+        }
+
+-- | Default implementation of 'SerialiserSpec' that uses 'SafeCopy'
+-- for serialising events.
+safeCopySerialiserSpec :: SerialiserSpec
+safeCopySerialiserSpec =
+    SerialiserSpec { serialisationClassName = ''SafeCopy
+                   , methodSerialiserName   = 'safeCopyMethodSerialiser
+                   , makeEventSerialiser    = makeSafeCopyInstance
+                   }
+
+
+-- | A variant on 'makeAcidic' that makes it possible to explicitly choose the
+-- serialisation implementation to be used for methods.
+makeAcidicWithSerialiser :: SerialiserSpec -> Name -> [Name] -> Q [Dec]
+makeAcidicWithSerialiser ss stateName eventNames
     = do stateInfo <- reify stateName
          case stateInfo of
            TyConI tycon
@@ -54,32 +84,48 @@ makeAcidic stateName eventNames
 #else
                  DataD _cxt _name tyvars constructors _derivs
 #endif
-                   -> makeAcidic' eventNames stateName tyvars constructors
+                   -> makeAcidic' ss eventNames stateName tyvars constructors
 #if MIN_VERSION_template_haskell(2,11,0)
                  NewtypeD _cxt _name tyvars _kind constructor _derivs
 #else
                  NewtypeD _cxt _name tyvars constructor _derivs
 #endif
-                   -> makeAcidic' eventNames stateName tyvars [constructor]
+                   -> makeAcidic' ss eventNames stateName tyvars [constructor]
                  TySynD _name tyvars _ty
-                   -> makeAcidic' eventNames stateName tyvars []
+                   -> makeAcidic' ss eventNames stateName tyvars []
                  _ -> error "Unsupported state type. Only 'data', 'newtype' and 'type' are supported."
            _ -> error "Given state is not a type."
 
-makeAcidic' :: [Name] -> Name -> [TyVarBndr] -> [Con] -> Q [Dec]
-makeAcidic' eventNames stateName tyvars constructors
-    = do events <- sequence [ makeEvent eventName | eventName <- eventNames ]
-         acidic <- makeIsAcidic eventNames stateName tyvars constructors
+makeAcidic' :: SerialiserSpec -> [Name] -> Name -> [TyVarBndr] -> [Con] -> Q [Dec]
+makeAcidic' ss eventNames stateName tyvars constructors
+    = do events <- sequence [ makeEvent ss eventName | eventName <- eventNames ]
+         acidic <- makeIsAcidic ss eventNames stateName tyvars constructors
          return $ acidic : concat events
 
-makeEvent :: Name -> Q [Dec]
-makeEvent eventName
-    = do eventType <- getEventType eventName
-         d <- makeEventDataType eventName eventType
-         b <- makeSafeCopyInstance eventName eventType
-         i <- makeMethodInstance eventName eventType
-         e <- makeEventInstance eventName eventType
-         return [d,b,i,e]
+-- | Given an event name (e.g. @'myUpdate@), produce a data type like
+--
+-- > data MyUpdate = MyUpdate Argument
+--
+-- along with the 'Method' class instance, 'Event' class instance and
+-- the instance of the appropriate serialisation class.
+--
+-- However, if the event data type already exists, this will generate
+-- the serialisation instance only.  This makes it possible to call
+-- 'makeAcidicWithSerialiser' multiple times on the same events but
+-- with different 'SerialiserSpec's, to support multiple serialisation
+-- backends.
+makeEvent :: SerialiserSpec -> Name -> Q [Dec]
+makeEvent ss eventName
+    = do exists <- recover (return False) (reify (toStructName eventName) >> return True)
+         eventType <- getEventType eventName
+         if exists
+           then do b <- makeEventSerialiser ss eventName eventType
+                   return [b]
+           else do d <- makeEventDataType      eventName eventType
+                   b <- makeEventSerialiser ss eventName eventType
+                   i <- makeMethodInstance     eventName eventType
+                   e <- makeEventInstance      eventName eventType
+                   return [d,b,i,e]
 
 getEventType :: Name -> Q Type
 getEventType eventName
@@ -95,16 +141,17 @@ getEventType eventName
 
 --instance (SafeCopy key, Typeable key, SafeCopy val, Typeable val) => IsAcidic State where
 --  acidEvents = [ UpdateEvent (\(MyUpdateEvent arg1 arg2 -> myUpdateEvent arg1 arg2) ]
-makeIsAcidic eventNames stateName tyvars constructors
+makeIsAcidic ss eventNames stateName tyvars constructors
     = do types <- mapM getEventType eventNames
          stateType' <- stateType
-         let preds = [ ''SafeCopy, ''Typeable ]
+         let preds = [ serialisationClassName ss, ''Typeable ]
              ty = appT (conT ''IsAcidic) stateType
-             handlers = zipWith makeEventHandler eventNames types
+             handlers = zipWith (makeEventHandler ss) eventNames types
              cxtFromEvents = nub $ concat $ zipWith (eventCxts stateType' tyvars) eventNames types
          cxts' <- mkCxtFromTyVars preds tyvars cxtFromEvents
          instanceD (return cxts') ty
-                   [ valD (varP 'acidEvents) (normalB (listE handlers)) [] ]
+                   [ valD (varP 'acidEvents) (normalB (listE handlers)) []
+                   ]
     where stateType = foldl appT (conT stateName) (map varT (allTyVarBndrNames tyvars))
 
 -- | This function analyses an event function and extracts any
@@ -219,13 +266,14 @@ renameState tfrom tto cxt = map renamePred cxt
     renameType (SigT a k)     = SigT (renameType a) k
     renameType typ            = typ
 
--- UpdateEvent (\(MyUpdateEvent arg1 arg2) -> myUpdateEvent arg1 arg2)
-makeEventHandler :: Name -> Type -> ExpQ
-makeEventHandler eventName eventType
+-- UpdateEvent (\(MyUpdateEvent arg1 arg2) -> myUpdateEvent arg1 arg2) safeCopyMethodSerialiser
+makeEventHandler :: SerialiserSpec -> Name -> Type -> ExpQ
+makeEventHandler ss eventName eventType
     = do assertTyVarsOk
          vars <- replicateM (length args) (newName "arg")
          let lamClause = conP eventStructName [varP var | var <- vars ]
          conE constr `appE` lamE [lamClause] (foldl appE (varE eventName) (map varE vars))
+                     `appE` varE (methodSerialiserName ss)
     where constr = if isUpdate then 'UpdateEvent else 'QueryEvent
           TypeAnalysis { tyvars, argumentTypes = args, stateType, isUpdate } = analyseType eventName eventType
           eventStructName = toStructName eventName
@@ -272,6 +320,7 @@ makeEventDataType eventName eventType
 -- instance (SafeCopy key, SafeCopy val) => SafeCopy (MyUpdateEvent key val) where
 --    put (MyUpdateEvent a b) = do put a; put b
 --    get = MyUpdateEvent <$> get <*> get
+makeSafeCopyInstance :: Name -> Type -> DecQ
 makeSafeCopyInstance eventName eventType
     = do let preds = [ ''SafeCopy ]
              ty = AppT (ConT ''SafeCopy) (foldl AppT (ConT eventStructName) (map VarT (allTyVarBndrNames tyvars)))
@@ -298,14 +347,14 @@ mkCxtFromTyVars preds tyvars extraContext
             map return extraContext
 
 {-
-instance (SafeCopy key, Typeable key
-         ,SafeCopy val, Typeable val) => Method (MyUpdateEvent key val) where
+instance (Typeable key, Typeable val) => Method (MyUpdateEvent key val) where
   type MethodResult (MyUpdateEvent key val) = Return
   type MethodState (MyUpdateEvent key val) = State key val
 -}
+makeMethodInstance :: Name -> Type -> DecQ
 makeMethodInstance eventName eventType = do
     let preds =
-            [ ''SafeCopy, ''Typeable ]
+            [ ''Typeable ]
         ty =
             AppT (ConT ''Method) (foldl AppT (ConT eventStructName) (map VarT (allTyVarBndrNames tyvars)))
         structType =
@@ -331,11 +380,10 @@ makeMethodInstance eventName eventType = do
     where TypeAnalysis { tyvars, context, stateType, resultType } = analyseType eventName eventType
           eventStructName = toStructName eventName
 
---instance (SafeCopy key, Typeable key
---         ,SafeCopy val, Typeable val) => UpdateEvent (MyUpdateEvent key val)
+--instance (Typeable key, Typeable val) => UpdateEvent (MyUpdateEvent key val)
 makeEventInstance :: Name -> Type -> DecQ
 makeEventInstance eventName eventType
-    = do let preds = [ ''SafeCopy, ''Typeable ]
+    = do let preds = [ ''Typeable ]
              eventClass = if isUpdate then ''UpdateEvent else ''QueryEvent
              ty = AppT (ConT eventClass) (foldl AppT (ConT eventStructName) (map VarT (allTyVarBndrNames tyvars)))
          instanceD (cxt $ [ classP classPred [varT tyvar] | tyvar <- allTyVarBndrNames tyvars, classPred <- preds ] ++ map return context)

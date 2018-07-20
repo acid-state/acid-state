@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP, GADTs, DeriveDataTypeable, TypeFamilies,
-             FlexibleContexts, BangPatterns #-}
+             FlexibleContexts, BangPatterns,
+             DefaultSignatures, ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Data.Acid.Core
@@ -28,11 +29,21 @@ module Data.Acid.Core
     , modifyCoreState_
     , withCoreState
     , lookupHotMethod
+    , lookupHotMethodAndSerialiser
     , lookupColdMethod
     , runHotMethod
     , runColdMethod
     , MethodMap
     , mkMethodMap
+
+    , Serialiser(..)
+    , safeCopySerialiser
+    , MethodSerialiser(..)
+    , safeCopyMethodSerialiser
+    , encodeMethod
+    , decodeMethod
+    , encodeResult
+    , decodeResult
     ) where
 
 import Control.Concurrent                 ( MVar, newMVar, withMVar
@@ -73,15 +84,65 @@ showQualifiedTypeRep tr = show tr
 
 #endif
 
+
+-- | Interface for (de)serialising values of type @a@.
+--
+-- A @'Serialiser' { 'serialiserEncode', 'serialiserDecode' }@ must
+-- satisfy the round-trip property:
+--
+-- > forall x . serialiserDecode (serialiserEncode x) == Right x
+data Serialiser a =
+    Serialiser
+        { serialiserEncode :: a -> Lazy.ByteString
+          -- ^ Serialise a value to a bytestring.
+        , serialiserDecode :: Lazy.ByteString -> Either String a
+          -- ^ Deserialise a value, generating a string error message
+          -- on failure.
+        }
+
+-- | Default implementation of 'Serialiser' interface using 'SafeCopy'.
+safeCopySerialiser :: SafeCopy a => Serialiser a
+safeCopySerialiser = Serialiser (runPutLazy . safePut) (runGetLazy safeGet)
+
+
+-- | Interface for (de)serialising a method, namely 'Serialiser's for
+-- its arguments type and its result type.
+data MethodSerialiser method =
+    MethodSerialiser
+        { methodSerialiser :: Serialiser method
+        , resultSerialiser :: Serialiser (MethodResult method)
+        }
+
+-- | Default implementation of 'MethodSerialiser' interface using 'SafeCopy'.
+safeCopyMethodSerialiser :: (SafeCopy method, SafeCopy (MethodResult method)) => MethodSerialiser method
+safeCopyMethodSerialiser = MethodSerialiser safeCopySerialiser safeCopySerialiser
+
+-- | Encode the arguments of a method using the given serialisation strategy.
+encodeMethod :: MethodSerialiser method -> method -> ByteString
+encodeMethod ms = serialiserEncode (methodSerialiser ms)
+
+-- | Decode the arguments of a method using the given serialisation strategy.
+decodeMethod :: MethodSerialiser method -> ByteString -> Either String method
+decodeMethod ms = serialiserDecode (methodSerialiser ms)
+
+-- | Encode the result of a method using the given serialisation strategy.
+encodeResult :: MethodSerialiser method -> MethodResult method -> ByteString
+encodeResult ms = serialiserEncode (resultSerialiser ms)
+
+-- | Decode the result of a method using the given serialisation strategy.
+decodeResult :: MethodSerialiser method -> ByteString -> Either String (MethodResult method)
+decodeResult ms = serialiserDecode (resultSerialiser ms)
+
+
 -- | The basic Method class. Each Method has an indexed result type
 --   and a unique tag.
-class ( Typeable ev, SafeCopy ev
-      , Typeable (MethodResult ev), SafeCopy (MethodResult ev)) =>
-      Method ev where
+class Method ev where
     type MethodResult ev
     type MethodState ev
     methodTag :: ev -> Tag
+    default methodTag :: Typeable ev => ev -> Tag
     methodTag ev = Lazy.pack (showQualifiedTypeRep (typeOf ev))
+
 
 -- | The control structure at the very center of acid-state.
 --   This module provides access to a mutable state through
@@ -154,12 +215,12 @@ lookupColdMethod :: Core st -> Tagged Lazy.ByteString -> State st Lazy.ByteStrin
 lookupColdMethod core (storedMethodTag, methodContent)
     = case Map.lookup storedMethodTag (coreMethods core) of
         Nothing      -> missingMethod storedMethodTag
-        Just (Method method)
-          -> liftM (runPutLazy . safePut) (method (lazyDecode methodContent))
+        Just (Method method ms)
+          -> liftM (encodeResult ms) (method (lazyDecode ms methodContent))
 
-lazyDecode :: SafeCopy a => Lazy.ByteString -> a
-lazyDecode inp
-    = case runGetLazy safeGet inp of
+lazyDecode :: MethodSerialiser method -> Lazy.ByteString -> method
+lazyDecode ms inp
+    = case decodeMethod ms inp of
         Left msg  -> error msg
         Right val -> val
 
@@ -179,21 +240,29 @@ runHotMethod core method
 -- | Find the state action that corresponds to an in-memory method.
 lookupHotMethod :: Method method => MethodMap (MethodState method) -> method
                 -> State (MethodState method) (MethodResult method)
-lookupHotMethod methodMap method
+lookupHotMethod methodMap method = fst (lookupHotMethodAndSerialiser methodMap method)
+
+-- | Find the state action and serialiser that correspond to an
+-- in-memory method.
+lookupHotMethodAndSerialiser :: Method method => MethodMap (MethodState method) -> method
+                             -> (State (MethodState method) (MethodResult method), MethodSerialiser method)
+lookupHotMethodAndSerialiser methodMap method
     = case Map.lookup (methodTag method) methodMap of
         Nothing -> missingMethod (methodTag method)
-        Just (Method methodHandler)
+        Just (Method methodHandler ms)
           -> -- If the methodTag doesn't index the right methodHandler then we're in deep
              -- trouble. Luckly, it would take deliberate malevolence for that to happen.
-             unsafeCoerce methodHandler method
+             (unsafeCoerce methodHandler method, unsafeCoerce ms)
 
 -- | Method tags must be unique and are most commonly generated automatically.
 type Tag = Lazy.ByteString
 type Tagged a = (Tag, a)
 
+type MethodBody method = method -> State (MethodState method) (MethodResult method)
+
 -- | Method container structure that hides the exact type of the method.
 data MethodContainer st where
-    Method :: (Method method) => (method -> State (MethodState method) (MethodResult method)) -> MethodContainer (MethodState method)
+    Method :: (Method method) => MethodBody method -> MethodSerialiser method -> MethodContainer (MethodState method)
 
 -- | Collection of Methods indexed by a Tag.
 type MethodMap st = Map.Map Tag (MethodContainer st)
@@ -205,8 +274,6 @@ mkMethodMap methods
     where -- A little bit of ugliness is required to access the methodTags.
           methodType :: MethodContainer st -> Tag
           methodType m = case m of
-                           Method fn -> let ev :: (ev -> State st res) -> ev
-                                            ev _ = undefined
-                                        in methodTag (ev fn)
-
-
+                           Method fn _ -> let ev :: (ev -> State st res) -> ev
+                                              ev _ = undefined
+                                          in methodTag (ev fn)

@@ -17,9 +17,14 @@ module Data.Acid.Advanced
     , Method(..)
     , IsAcidic(..)
     , Event(..)
+
+    , safeCopySerialiser
+    , safeCopyMethodSerialiser
+    , defaultArchiver
     ) where
 
 import Data.Acid.Abstract
+import Data.Acid.Archive
 import Data.Acid.Core
 import Data.Acid.Common
 
