@@ -11,7 +11,6 @@ import Data.Acid.Core
 import Data.Acid.Common
 
 import Data.List ((\\), nub, delete)
-import Data.Maybe (mapMaybe)
 import Data.SafeCopy
 import Data.Typeable
 import Data.Char
@@ -229,9 +228,7 @@ makeEventHandler eventName eventType
          conE constr `appE` lamE [lamClause] (foldl appE (varE eventName) (map varE vars))
     where constr = if isUpdate then 'UpdateEvent else 'QueryEvent
           TypeAnalysis { tyvars, argumentTypes = args, stateType, isUpdate } = analyseType eventName eventType
-          eventStructName = mkName (structName (nameBase eventName))
-          structName [] = []
-          structName (x:xs) = toUpper x : xs
+          eventStructName = toStructName eventName
           stateTypeTyVars = findTyVars stateType
           tyVarNames = map tyVarBndrName tyvars
           assertTyVarsOk =
@@ -270,9 +267,7 @@ makeEventDataType eventName eventType
           _   -> dataD (return []) eventStructName tyvars [con] cxt
 #endif
     where TypeAnalysis { tyvars, argumentTypes = args } = analyseType eventName eventType
-          eventStructName = mkName (structName (nameBase eventName))
-          structName [] = []
-          structName (x:xs) = toUpper x : xs
+          eventStructName = toStructName eventName
 
 -- instance (SafeCopy key, SafeCopy val) => SafeCopy (MyUpdateEvent key val) where
 --    put (MyUpdateEvent a b) = do put a; put b
@@ -296,9 +291,7 @@ makeSafeCopyInstance eventName eventType
                    , valD (varP 'getCopy) (normalB (contained getArgs)) []
                    ]
     where TypeAnalysis { tyvars, context, argumentTypes = args } = analyseType eventName eventType
-          eventStructName = mkName (structName (nameBase eventName))
-          structName [] = []
-          structName (x:xs) = toUpper x : xs
+          eventStructName = toStructName eventName
 
 mkCxtFromTyVars preds tyvars extraContext
     = cxt $ [ classP classPred [varT tyvar] | tyvar <- allTyVarBndrNames tyvars, classPred <- preds ] ++
@@ -336,9 +329,7 @@ makeMethodInstance eventName eventType = do
 #endif
         ]
     where TypeAnalysis { tyvars, context, stateType, resultType } = analyseType eventName eventType
-          eventStructName = mkName (structName (nameBase eventName))
-          structName [] = []
-          structName (x:xs) = toUpper x : xs
+          eventStructName = toStructName eventName
 
 --instance (SafeCopy key, Typeable key
 --         ,SafeCopy val, Typeable val) => UpdateEvent (MyUpdateEvent key val)
@@ -351,9 +342,7 @@ makeEventInstance eventName eventType
                    (return ty)
                    []
     where TypeAnalysis { tyvars, context, isUpdate } = analyseType eventName eventType
-          eventStructName = mkName (structName (nameBase eventName))
-          structName [] = []
-          structName (x:xs) = toUpper x : xs
+          eventStructName = toStructName eventName
 
 data TypeAnalysis = TypeAnalysis
     { tyvars :: [TyVarBndr]
@@ -451,3 +440,11 @@ tyVarBndrName (KindedTV n _) = n
 
 allTyVarBndrNames :: [TyVarBndr] -> [Name]
 allTyVarBndrNames tyvars = map tyVarBndrName tyvars
+
+-- | Convert the 'Name' of the event function into the name of the
+-- corresponding data constructor.
+toStructName :: Name -> Name
+toStructName eventName = mkName (structName (nameBase eventName))
+  where
+    structName [] = []
+    structName (x:xs) = toUpper x : xs
