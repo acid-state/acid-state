@@ -24,6 +24,7 @@ Source-repository head
 
 Library
   Exposed-Modules:     Data.Acid,
+                       Data.Acid.Archive,
                        Data.Acid.Local, Data.Acid.Memory,
                        Data.Acid.Memory.Pure, Data.Acid.Remote,
                        Data.Acid.Advanced,
@@ -31,8 +32,7 @@ Library
                        Data.Acid.Abstract, Data.Acid.Core,
                        Data.Acid.TemplateHaskell
 
-  Other-modules:       Data.Acid.Archive,
-                       Paths_acid_state,
+  Other-modules:       Paths_acid_state,
                        Data.Acid.Common, FileIO
 
   Build-depends:       array,
