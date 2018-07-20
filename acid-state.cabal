@@ -28,14 +28,15 @@ Library
                        Data.Acid.Memory.Pure, Data.Acid.Remote,
                        Data.Acid.Advanced,
                        Data.Acid.Log, Data.Acid.CRC,
-                       Data.Acid.Abstract, Data.Acid.Core
+                       Data.Acid.Abstract, Data.Acid.Core,
+                       Data.Acid.TemplateHaskell
 
   Other-modules:       Data.Acid.Archive,
                        Paths_acid_state,
-                       Data.Acid.TemplateHaskell, Data.Acid.Common, FileIO
+                       Data.Acid.Common, FileIO
 
   Build-depends:       array,
-                       base >= 4 && < 5,
+                       base >= 4.5.1.0 && < 5,
                        bytestring >= 0.10.2,
                        cereal >= 0.4.1.0,
                        containers,
@@ -47,7 +48,8 @@ Library
                        filepath,
                        mtl,
                        network,
-                       template-haskell
+                       template-haskell,
+                       th-expand-syns
 
   if os(windows)
      Build-depends:       Win32
@@ -64,6 +66,22 @@ Library
   default-language:    Haskell2010
   GHC-Options:         -fwarn-unused-imports -fwarn-unused-binds
 
+test-suite specs
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base
+                     , acid-state
+                     , deepseq
+                     , hspec
+                     , hspec-discover
+                     , mtl
+                     , safecopy
+                     , template-haskell
+  build-tool-depends: hspec-discover:hspec-discover
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  other-modules:       Data.Acid.TemplateHaskellSpec
+  default-language:    Haskell2010
 
 
 benchmark loading-benchmark
@@ -82,7 +100,7 @@ benchmark loading-benchmark
     directory,
     system-fileio == 0.3.*,
     system-filepath,
-    criterion >= 0.8 && < 1.2,
+    criterion >= 0.8 && < 1.5,
     mtl,
     base,
     acid-state

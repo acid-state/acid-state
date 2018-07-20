@@ -1,22 +1,24 @@
-{-# LANGUAGE TemplateHaskell, CPP #-}
+{-# LANGUAGE TemplateHaskell, CPP, NamedFieldPuns #-}
+
 {- Holy crap this code is messy. -}
-module Data.Acid.TemplateHaskell
-    ( makeAcidic
-    ) where
+module Data.Acid.TemplateHaskell where
 
 import Language.Haskell.TH
 import Language.Haskell.TH.Ppr
+import Language.Haskell.TH.ExpandSyns
 
 import Data.Acid.Core
 import Data.Acid.Common
 
-import Data.List ((\\), nub)
+import Data.List ((\\), nub, delete)
 import Data.Maybe (mapMaybe)
 import Data.SafeCopy
 import Data.Typeable
 import Data.Char
 import Control.Applicative
 import Control.Monad
+import Control.Monad.State (MonadState)
+import Control.Monad.Reader (MonadReader)
 
 {-| Create the control structures required for acid states
     using Template Haskell.
@@ -89,7 +91,7 @@ getEventType eventName
 #else
            VarI _name eventType _decl _fixity
 #endif
-             -> return eventType
+             -> expandSyns eventType
            _ -> error $ "Events must be functions: " ++ show eventName
 
 --instance (SafeCopy key, Typeable key, SafeCopy val, Typeable val) => IsAcidic State where
@@ -140,17 +142,29 @@ makeIsAcidic eventNames stateName tyvars constructors
 -- need to rename the variables in the context to match.
 --
 -- The contexts returned by this function will have the variables renamed.
-eventCxts :: Type        -- ^ State type (used for error messages)
+--
+-- Additionally, if the event uses MonadReader or MonadState it might look
+-- like this:
+--
+-- > setState :: (MonadState x m, IsFoo x) => m ()
+--
+-- In this case we have to rename 'x' to the actual state we're going to
+-- use. This is done by 'renameState'.
+eventCxts :: Type        -- ^ State type
           -> [TyVarBndr] -- ^ type variables that will be used for the State type in the IsAcidic instance
           -> Name        -- ^ 'Name' of the event
           -> Type        -- ^ 'Type' of the event
           -> [Pred]      -- ^ extra context to add to 'IsAcidic' instance
 eventCxts targetStateType targetTyVars eventName eventType =
-    let (_tyvars, cxt, _args, stateType, _resultType, _isUpdate)
+    let TypeAnalysis { context = cxt, stateType }
                     = analyseType eventName eventType
-        eventTyVars = findTyVars stateType -- find the type variable names that this event is using for the State type
-        table       = zip eventTyVars (map tyVarBndrName targetTyVars) -- create a lookup table
-    in map (unify table) cxt -- rename the type variables
+        -- find the type variable names that this event is using
+        -- for the State type
+        eventTyVars = findTyVars stateType
+        -- create a lookup table
+        table       = zip eventTyVars (map tyVarBndrName targetTyVars)
+    in map (unify table) -- rename the type variables
+       (renameState stateType targetStateType cxt)
     where
       -- | rename the type variables in a Pred
       unify :: [(Name, Name)] -> Pred -> Pred
@@ -191,6 +205,21 @@ eventCxts targetStateType targetTyVars eventName eventType =
                                        ]
             (Just n') -> n'
 
+-- | See the end of comment for 'eventCxts'.
+renameState :: Type -> Type -> Cxt -> Cxt
+renameState tfrom tto cxt = map renamePred cxt
+  where
+#if MIN_VERSION_template_haskell(2,10,0)
+    renamePred p = renameType p -- in 2.10.0: type Pred = Type
+#else
+    renamePred (ClassP n tys) = ClassP n (map renameType tys)
+    renamePred (EqualP a b)   = EqualP (renameType a) (renameType b)
+#endif
+    renameType n | n == tfrom = tto
+    renameType (AppT a b)     = AppT (renameType a) (renameType b)
+    renameType (SigT a k)     = SigT (renameType a) k
+    renameType typ            = typ
+
 -- UpdateEvent (\(MyUpdateEvent arg1 arg2) -> myUpdateEvent arg1 arg2)
 makeEventHandler :: Name -> Type -> ExpQ
 makeEventHandler eventName eventType
@@ -199,7 +228,7 @@ makeEventHandler eventName eventType
          let lamClause = conP eventStructName [varP var | var <- vars ]
          conE constr `appE` lamE [lamClause] (foldl appE (varE eventName) (map varE vars))
     where constr = if isUpdate then 'UpdateEvent else 'QueryEvent
-          (tyvars, _cxt, args, stateType, _resultType, isUpdate) = analyseType eventName eventType
+          TypeAnalysis { tyvars, argumentTypes = args, stateType, isUpdate } = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
@@ -220,10 +249,9 @@ makeEventHandler eventName eventType
                       , pprint stateType
                       ]
 
-
-
 --data MyUpdateEvent = MyUpdateEvent Arg1 Arg2
 --  deriving (Typeable)
+makeEventDataType :: Name -> Type -> DecQ
 makeEventDataType eventName eventType
     = do let con = normalC eventStructName [ strictType notStrict (return arg) | arg <- args ]
 #if MIN_VERSION_template_haskell(2,12,0)
@@ -241,7 +269,7 @@ makeEventDataType eventName eventType
           [_] -> newtypeD (return []) eventStructName tyvars con cxt
           _   -> dataD (return []) eventStructName tyvars [con] cxt
 #endif
-    where (tyvars, _cxt, args, _stateType, _resultType, _isUpdate) = analyseType eventName eventType
+    where TypeAnalysis { tyvars, argumentTypes = args } = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
@@ -267,7 +295,7 @@ makeSafeCopyInstance eventName eventType
                    [ funD 'putCopy [clause [putClause] (normalB (contained putExp)) []]
                    , valD (varP 'getCopy) (normalB (contained getArgs)) []
                    ]
-    where (tyvars, context, args, _stateType, _resultType, _isUpdate) = analyseType eventName eventType
+    where TypeAnalysis { tyvars, context, argumentTypes = args } = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
@@ -282,27 +310,39 @@ instance (SafeCopy key, Typeable key
   type MethodResult (MyUpdateEvent key val) = Return
   type MethodState (MyUpdateEvent key val) = State key val
 -}
-makeMethodInstance eventName eventType
-    = do let preds = [ ''SafeCopy, ''Typeable ]
-             ty = AppT (ConT ''Method) (foldl AppT (ConT eventStructName) (map VarT (allTyVarBndrNames tyvars)))
-             structType = foldl appT (conT eventStructName) (map varT (allTyVarBndrNames tyvars))
-         instanceD (cxt $ [ classP classPred [varT tyvar] | tyvar <- allTyVarBndrNames tyvars, classPred <- preds ] ++ map return context)
-                   (return ty)
+makeMethodInstance eventName eventType = do
+    let preds =
+            [ ''SafeCopy, ''Typeable ]
+        ty =
+            AppT (ConT ''Method) (foldl AppT (ConT eventStructName) (map VarT (allTyVarBndrNames tyvars)))
+        structType =
+            foldl appT (conT eventStructName) (map varT (allTyVarBndrNames tyvars))
+        instanceContext  =
+            cxt $
+                [ classP classPred [varT tyvar]
+                | tyvar <- allTyVarBndrNames tyvars
+                , classPred <- preds
+                ]
+                ++ map return context
+    instanceD
+        instanceContext
+        (return ty)
 #if __GLASGOW_HASKELL__ >= 707
-                   [ tySynInstD ''MethodResult (tySynEqn [structType] (return resultType))
-                   , tySynInstD ''MethodState  (tySynEqn [structType] (return stateType))
+        [ tySynInstD ''MethodResult (tySynEqn [structType] (return resultType))
+        , tySynInstD ''MethodState  (tySynEqn [structType] (return stateType))
 #else
-                   [ tySynInstD ''MethodResult [structType] (return resultType)
-                   , tySynInstD ''MethodState  [structType] (return stateType)
+        [ tySynInstD ''MethodResult [structType] (return resultType)
+        , tySynInstD ''MethodState  [structType] (return stateType)
 #endif
-                   ]
-    where (tyvars, context, _args, stateType, resultType, _isUpdate) = analyseType eventName eventType
+        ]
+    where TypeAnalysis { tyvars, context, stateType, resultType } = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
 
 --instance (SafeCopy key, Typeable key
 --         ,SafeCopy val, Typeable val) => UpdateEvent (MyUpdateEvent key val)
+makeEventInstance :: Name -> Type -> DecQ
 makeEventInstance eventName eventType
     = do let preds = [ ''SafeCopy, ''Typeable ]
              eventClass = if isUpdate then ''UpdateEvent else ''QueryEvent
@@ -310,34 +350,90 @@ makeEventInstance eventName eventType
          instanceD (cxt $ [ classP classPred [varT tyvar] | tyvar <- allTyVarBndrNames tyvars, classPred <- preds ] ++ map return context)
                    (return ty)
                    []
-    where (tyvars, context, _args, _stateType, _resultType, isUpdate) = analyseType eventName eventType
+    where TypeAnalysis { tyvars, context, isUpdate } = analyseType eventName eventType
           eventStructName = mkName (structName (nameBase eventName))
           structName [] = []
           structName (x:xs) = toUpper x : xs
 
+data TypeAnalysis = TypeAnalysis
+    { tyvars :: [TyVarBndr]
+    , context :: Cxt
+    , argumentTypes :: [Type]
+    , stateType :: Type
+    , resultType :: Type
+    , isUpdate :: Bool
+    } deriving (Eq, Show)
 
--- (tyvars, cxt, args, state type, result type, is update)
-analyseType :: Name -> Type -> ([TyVarBndr], Cxt, [Type], Type, Type, Bool)
-analyseType eventName t
-    = let (tyvars, cxt, t') = case t of
-                                ForallT binds [] t' ->
-                                  (binds, [], t')
-                                ForallT binds cxt t' ->
-                                  (binds, cxt, t')
-                                _ -> ([], [], t)
-          args = getArgs t'
-          (stateType, resultType, isUpdate) = findMonad t'
-      in (tyvars, cxt, args, stateType, resultType, isUpdate)
-    where getArgs ForallT{} = error $ "Event has an invalid type signature: Nested forall: " ++ show eventName
-          getArgs (AppT (AppT ArrowT a) b) = a : getArgs b
-          getArgs _ = []
+analyseType :: Name -> Type -> TypeAnalysis
+analyseType eventName t = go [] [] [] t
+  where
+#if MIN_VERSION_template_haskell(2,10,0)
+    getMonadReader :: Cxt -> Name -> [(Type, Type)]
+    getMonadReader cxt m = do
+       constraint@(AppT (AppT (ConT c) x) m') <- cxt
+       guard (c == ''MonadReader && m' == VarT m)
+       return (constraint, x)
 
-          findMonad (AppT (AppT ArrowT a) b)
-              = findMonad b
-          findMonad (AppT (AppT (ConT con) state) result)
-              | con == ''Update = (state, result, True)
-              | con == ''Query  = (state, result, False)
-          findMonad _ = error $ "Event has an invalid type signature: Not an Update or a Query: " ++ show eventName
+    getMonadState :: Cxt -> Name -> [(Type, Type)]
+    getMonadState cxt m = do
+       constraint@(AppT (AppT (ConT c) x) m') <- cxt
+       guard (c == ''MonadState && m' == VarT m)
+       return (constraint, x)
+#else
+    getMonadReader :: Cxt -> Name -> [(Pred, Type)]
+    getMonadReader cxt m = do
+       constraint@(ClassP c [x, m']) <- cxt
+       guard (c == ''MonadReader && m' == VarT m)
+       return (constraint, x)
+
+    getMonadState :: Cxt -> Name -> [(Pred, Type)]
+    getMonadState cxt m = do
+       constraint@(ClassP c [x, m']) <- cxt
+       guard (c == ''MonadState && m' == VarT m)
+       return (constraint, x)
+#endif
+
+    -- a -> b
+    go tyvars cxt args (AppT (AppT ArrowT a) b)
+        = go tyvars cxt (args ++ [a]) b
+    -- Update st res
+    -- Query st res
+    go tyvars context argumentTypes (AppT (AppT (ConT con) stateType) resultType)
+        | con == ''Update =
+            TypeAnalysis
+                { tyvars, context, argumentTypes, stateType, resultType
+                , isUpdate = True
+                }
+        | con == ''Query  =
+            TypeAnalysis
+                { tyvars, context, argumentTypes, stateType, resultType
+                , isUpdate = False
+                }
+    -- (...) => a
+    go tyvars cxt args (ForallT tyvars2 cxt2 a)
+        = go (tyvars ++ tyvars2) (cxt ++ cxt2) args a
+    -- (MonadState state m) => ... -> m result
+    -- (MonadReader state m) => ... -> m result
+    go tyvars' cxt argumentTypes (AppT (VarT m) resultType)
+        | [] <- queries, [(cx, stateType)] <- updates
+            = TypeAnalysis
+                { tyvars,  argumentTypes , stateType, resultType
+                , isUpdate = False
+                , context = delete cx cxt
+                }
+
+        | [(cx, stateType)] <- queries, [] <- updates
+            = TypeAnalysis
+                { tyvars,  argumentTypes , stateType, resultType
+                , isUpdate = False
+                , context = delete cx cxt
+                }
+      where
+        queries = getMonadReader cxt m
+        updates = getMonadState cxt m
+        tyvars = filter ((/= m) . tyVarBndrName) tyvars'
+    -- otherwise, fail
+    go _ _ _ _ = error $ "Event has an invalid type signature: Not an Update, Query, MonadState, or MonadReader: " ++ show eventName
 
 -- | find the type variables
 -- | e.g. State a b  ==> [a,b]
