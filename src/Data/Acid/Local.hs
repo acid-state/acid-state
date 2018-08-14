@@ -288,7 +288,7 @@ resumeLocalStateFrom directory initialState delayLocking =
       return $ do
         replayEvents lock n st
   where
-    lockFile = directory </> "open"
+    lockFile = directory </> "open.lock"
     eventsLogKey = LogKey { logDirectory = directory
                           , logPrefix = "events" }
     checkpointsLogKey = LogKey { logDirectory = directory
