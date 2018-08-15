@@ -22,6 +22,11 @@ Source-repository head
   type:          git
   location:      https://github.com/acid-state/acid-state
 
+flag skip-state-machine-test
+  description: If enabled, do not build/run the state-machine test
+  default: False
+  manual: True
+
 Library
   Exposed-Modules:     Data.Acid,
                        Data.Acid.Archive,
@@ -99,6 +104,9 @@ test-suite state-machine
   other-modules:       Data.Acid.KeyValueStateMachine
                        Data.Acid.StateMachineTest
   default-language:    Haskell2010
+
+  if flag(skip-state-machine-test)
+    buildable: False
 
 
 benchmark loading-benchmark
