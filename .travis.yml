@@ -75,10 +75,7 @@ install:
   - grep -Ev -- '^\s*--' ${HOME}/.cabal/config | grep -Ev '^\s*$'
   - "printf 'packages: \".\"\\n' > cabal.project"
   - touch cabal.project.local
-  # set -fskip-state-machine-test on affected GHC versions that cannot build the state-machine component
-  - if $NOSTATEMACHINETEST; then
-      "printf 'package acid-state\\n  flags: skip-state-machine-test' >> cabal.project.local"
-    fi
+  - "if $NOSTATEMACHINETEST; then printf 'package acid-state\\n  flags: skip-state-machine-test' >> cabal.project.local; fi"
   - "if ! $NOINSTALLEDCONSTRAINTS; then for pkg in $($HCPKG list --simple-output); do echo $pkg  | grep -vw -- acid-state | sed 's/^/constraints: /' | sed 's/-[^-]*$/ installed/' >> cabal.project.local; done; fi"
   - cat cabal.project || true
   - cat cabal.project.local || true
