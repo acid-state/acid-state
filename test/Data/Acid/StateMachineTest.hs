@@ -12,6 +12,7 @@ module Data.Acid.StateMachineTest
   , acidQuery
   , acidStateSequentialProperty
   , acidStateParallelProperty
+  , restoreOldStateProperty
   , acidStateInterface
   , AcidStateInterface(..)
 
@@ -304,3 +305,15 @@ acidStateParallelProperty i gen_initial_state commands = property $ do
                  ] ++ commands
     test $ do liftIO $ resetState i
               executeParallel StateAbsent actions
+
+-- | Test that restoring an acid-state component (with the given initial
+-- value), then executing the given query, results in the given
+-- expected value.  This is mostly useful to test that restoring from
+-- files created by an older version of acid-state can still be read.
+restoreOldStateProperty :: (Acid.EventState e ~ s, Acid.EventResult e ~ r, Acid.QueryEvent e, Eq r, Show r)
+                        => AcidStateInterface s -> s -> e -> r -> Property
+restoreOldStateProperty i initial_state q expected_result = withTests 1 $ property $ test $ do
+    liftIO $ removeFile (statePath i ++ "/open.lock") `catch` (\ (_ :: IOException) -> return ())
+    st <- liftIO $ openState i initial_state
+    r  <- liftIO $ Acid.query st q
+    r === expected_result

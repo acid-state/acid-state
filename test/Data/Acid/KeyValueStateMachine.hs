@@ -49,7 +49,13 @@ lookupKey key
     = do KeyValue m <- ask
          return (Map.lookup key m)
 
-$(makeAcidic ''KeyValue ['insertKey, 'reverseKey, 'lookupKey])
+-- | Query the current value of the state.  This is not used in the
+-- generated commands, but is used for checking the state we get back
+-- in 'prop_restore_old_state_1' etc.
+askState :: Query KeyValue KeyValue
+askState = ask
+
+$(makeAcidic ''KeyValue ['insertKey, 'reverseKey, 'lookupKey, 'askState])
 
 deriving instance Show InsertKey
 deriving instance Show ReverseKey
@@ -92,6 +98,29 @@ prop_parallel :: Property
 prop_parallel = acidStateParallelProperty (acidStateInterface fp) (pure (head initialStates)) keyValueCommands
   where
     fp = "state/KeyValueParallelTest"
+
+prop_restore_old_state_1 :: Property
+prop_restore_old_state_1 = restoreOldStateProperty (acidStateInterface fp) (KeyValue Map.empty) AskState r
+  where
+    fp = "test-state/OldStateTest1"
+    r  = KeyValue (Map.fromList [(1,""),(2,""),(3,"y5Pl"),(4,""),(5,"Zc"),(6,"8aENKK")
+                                ,(7,"FDzyGCz"),(8,""),(9,"xq"),(10,"1Ra1obuINa")])
+
+prop_restore_old_state_2 :: Property
+prop_restore_old_state_2 = restoreOldStateProperty (acidStateInterface fp) (KeyValue Map.empty) AskState r
+  where
+    fp = "test-state/OldStateTest2"
+    r  = KeyValue (Map.fromList [(1,"PLwR1S6F"),(2,"0yrcVQM0c"),(3,"zAA"),(4,"prAocOc")
+                                ,(5,"HM"),(6,"ENdfLrrW"),(7,"sESXGsI"),(8,"AFa69uu5")
+                                ,(9,"XBvIQHX"),(10,"A2CzkvW")])
+
+prop_restore_old_state_3 :: Property
+prop_restore_old_state_3 = restoreOldStateProperty (acidStateInterface fp) (KeyValue Map.empty) AskState r
+  where
+    fp = "test-state/OldStateTest3"
+    r  = KeyValue (Map.fromList [(1,"4"),(2,"RQ1xEc5"),(3,"aT0Hqk"),(4,"Duf")
+                                ,(5,"tssCng7e0d"),(6,"uQW0hCVze"),(7,"FSCZPMGL")
+                                ,(8,"q1WI9He"),(9,"IYHbWmO"),(10,"lCErPJC3")])
 
 
 tests :: IO Bool
