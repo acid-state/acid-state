@@ -278,13 +278,13 @@ acidQuery gen_event = Command gen execute
 -- one result, this will fail due to #20.
 acidStateSequentialProperty :: AcidStateInterface s -> Gen s -> [Command Gen (TestT IO) (Model s)] -> Property
 acidStateSequentialProperty i gen_initial_state commands = property $ do
-    actions <- forAll $ Gen.sequential (Range.linear 1 10) StateAbsent $
+    actions <- forAll $ Gen.sequential (Range.linear 10 50) StateAbsent $
                  [ open i gen_initial_state
                  , close i
                  , checkpoint i
                  , checkpointClose i
                  , kill i
-                 ] ++ commands
+                 ] ++ commands ++ commands
     test $ do liftIO $ resetState i
               executeSequential StateAbsent actions
 

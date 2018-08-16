@@ -65,10 +65,10 @@ genLookupKey :: Gen LookupKey
 genLookupKey = LookupKey <$> genKey
 
 genKey :: Gen Key
-genKey = Gen.int (Range.linear 1 10)
+genKey = Gen.int (Range.constant 1 10)
 
 genValue :: Gen Value
-genValue = Gen.string (Range.linear 0 10) Gen.unicode
+genValue = Gen.string (Range.constant 0 10) Gen.alphaNum
 
 keyValueCommands :: MonadIO m => [Command Gen m (Model KeyValue)]
 keyValueCommands = [ acidUpdate genInsertKey
