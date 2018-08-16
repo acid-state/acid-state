@@ -90,12 +90,12 @@ initialStates = [ KeyValue Map.empty
                 ]
 
 prop_sequential :: Property
-prop_sequential = acidStateSequentialProperty (acidStateInterface fp) (pure (head initialStates)) keyValueCommands
+prop_sequential = acidStateSequentialProperty (acidStateInterface fp) (pure (head initialStates)) (Range.linear 1 10) keyValueCommands
   where
     fp = "state/KeyValueSequentialTest"
 
 prop_parallel :: Property
-prop_parallel = acidStateParallelProperty (acidStateInterface fp) (pure (head initialStates)) keyValueCommands
+prop_parallel = acidStateParallelProperty (acidStateInterface fp) (pure (head initialStates)) (Range.linear 1 10) (Range.linear 1 10) keyValueCommands
   where
     fp = "state/KeyValueParallelTest"
 

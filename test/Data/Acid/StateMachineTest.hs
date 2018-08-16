@@ -36,7 +36,6 @@ import qualified Data.SafeCopy as SafeCopy
 import           Data.Typeable
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
 import           System.Directory (removeDirectoryRecursive, removeFile)
 
 
@@ -277,9 +276,9 @@ acidQuery gen_event = Command gen execute
 --
 -- Note that if the generator for initial values can return more than
 -- one result, this will fail due to #20.
-acidStateSequentialProperty :: AcidStateInterface s -> Gen s -> [Command Gen (TestT IO) (Model s)] -> Property
-acidStateSequentialProperty i gen_initial_state commands = property $ do
-    actions <- forAll $ Gen.sequential (Range.linear 10 50) StateAbsent $
+acidStateSequentialProperty :: AcidStateInterface s -> Gen s -> Range Int -> [Command Gen (TestT IO) (Model s)] -> Property
+acidStateSequentialProperty i gen_initial_state range commands = property $ do
+    actions <- forAll $ Gen.sequential range StateAbsent $
                  [ open i gen_initial_state
                  , close i
                  , checkpoint i
@@ -297,9 +296,9 @@ acidStateSequentialProperty i gen_initial_state commands = property $ do
 --
 -- Note that if the generator for initial values can return more than
 -- one result, this will fail due to #20.
-acidStateParallelProperty :: AcidStateInterface s -> Gen s -> [Command Gen (TestT IO) (Model s)] -> Property
-acidStateParallelProperty i gen_initial_state commands = property $ do
-    actions <- forAll $ Gen.parallel (Range.linear 1 10) (Range.linear 1 10) StateAbsent $
+acidStateParallelProperty :: AcidStateInterface s -> Gen s -> Range Int -> Range Int -> [Command Gen (TestT IO) (Model s)] -> Property
+acidStateParallelProperty i gen_initial_state prefix_range parallel_range commands = property $ do
+    actions <- forAll $ Gen.parallel prefix_range parallel_range StateAbsent $
                  [ open i gen_initial_state
                  , checkpoint i
                  ] ++ commands
