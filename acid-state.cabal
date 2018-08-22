@@ -17,6 +17,12 @@ Extra-source-files:
         examples/errors/*.hs
         src-win32/*.hs
         src-unix/*.hs
+        test-state/OldStateTest1/*.log
+        test-state/OldStateTest1/*.version
+        test-state/OldStateTest2/*.log
+        test-state/OldStateTest2/*.version
+        test-state/OldStateTest3/*.log
+        test-state/OldStateTest3/*.version
 
 Source-repository head
   type:          git
