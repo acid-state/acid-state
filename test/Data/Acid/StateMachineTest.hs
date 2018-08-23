@@ -9,7 +9,11 @@
 -- particular acid-state component to get a concrete test.
 module Data.Acid.StateMachineTest
   ( acidUpdate
+  , acidUpdateMayFail
+  , acidUpdateCheckFail
   , acidQuery
+  , acidQueryMayFail
+  , acidQueryCheckFail
   , acidStateSequentialProperty
   , acidStateParallelProperty
   , restoreOldStateProperty
@@ -22,9 +26,13 @@ module Data.Acid.StateMachineTest
   , checkpoint
   , checkpointClose
   , kill
+
+  , TransactionError(..)
+  , failQuery
+  , failUpdate
   ) where
 
-import           Control.Exception (IOException, catch)
+import           Control.Exception (Exception, IOException, throw, catch, evaluate)
 import           Control.Monad.Reader
 import           Control.Monad.State
 import qualified Data.Acid as Acid
@@ -37,6 +45,32 @@ import           Data.Typeable
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import           System.Directory (removeDirectoryRecursive, removeFile)
+import           System.IO.Unsafe (unsafePerformIO)
+
+-- | Exception to be thrown when a query or update fails.
+--
+-- At the moment the only way to implement failing transactions is by
+-- throwing an exception from pure code. The state machine tests
+-- assume that all failures use 'failQuery' or 'failUpdate', which
+-- throw this exception. Thus we can catch this exception in cases
+-- where transaction failures are accepted.
+--
+-- Even if acid-state provided a pure way to throw and catch errors in
+-- the 'Update' and 'Query' monads, we would still need to test that
+-- it correctly handles exceptions thrown during transactions.
+data TransactionError = TransactionError String
+  deriving Show
+instance Exception TransactionError
+
+-- | Cause a 'Query' to fail in a (possibly) expected manner.  See
+-- 'acidQueryMayFail' and 'acidQueryCheckFail'.
+failQuery :: String -> Acid.Query s a
+failQuery s = throw (TransactionError s)
+
+-- | Cause an 'Update' to fail in a (possibly) expected manner.  See
+-- 'acidUpdateMayFail' and 'acidUpdateCheckFail'.
+failUpdate :: String -> Acid.Update s a
+failUpdate s = throw (TransactionError s)
 
 
 -- | Model of an acid-state component, for state machine property
@@ -189,7 +223,8 @@ lookupMethod m = Core.lookupHotMethod mmap m
     mmap = Core.mkMethodMap (Common.eventsToMethods Common.acidEvents)
 
 -- | Translate an acid-state update into a command that executes the
--- update, given a generator of inputs.
+-- update, given a generator of inputs.  If the update fails, the
+-- property as a whole fails.
 acidUpdate :: forall s e m .
               ( Acid.IsAcidic s
               , Acid.EventState e ~ s
@@ -201,7 +236,41 @@ acidUpdate :: forall s e m .
               , MonadIO m
               )
            => Gen e -> Command Gen m (Model s)
-acidUpdate gen_event = Command gen execute [ Require require, Update update, Ensure ensure ]
+acidUpdate = acidUpdateCheckFail (\ _ _ _ _ -> failure)
+
+-- | Translate an acid-state update into a command that executes the
+-- update, given a generator of inputs.  If the update fails, the
+-- property as a whole succeeds.
+acidUpdateMayFail :: forall s e m .
+              ( Acid.IsAcidic s
+              , Acid.EventState e ~ s
+              , Acid.UpdateEvent e
+              , Show e
+              , Eq (Acid.EventResult e)
+              , Show (Acid.EventResult e)
+              , Typeable (Acid.EventResult e)
+              , MonadIO m
+              )
+           => Gen e -> Command Gen m (Model s)
+acidUpdateMayFail = acidUpdateCheckFail (\ _ _ _ _ -> return ())
+
+-- | Translate an acid-state update into a command that executes the
+-- update, given a generator of inputs.  If the update fails, the
+-- given predicate is tested on the old and new states, the event and
+-- the 'TransactionError' exception.
+acidUpdateCheckFail :: forall s e m .
+              ( Acid.IsAcidic s
+              , Acid.EventState e ~ s
+              , Acid.UpdateEvent e
+              , Show e
+              , Eq (Acid.EventResult e)
+              , Show (Acid.EventResult e)
+              , Typeable (Acid.EventResult e)
+              , MonadIO m
+              )
+           => (s -> s -> e -> TransactionError -> Test ())
+           -> Gen e -> Command Gen m (Model s)
+acidUpdateCheckFail allow_failure gen_event = Command gen execute [ Require require, Update update, Ensure ensure ]
   where
     -- Generate updates only when state is open
     gen :: Model s Symbolic -> Maybe (Gen (AcidCommand s e Symbolic))
@@ -210,24 +279,36 @@ acidUpdate gen_event = Command gen execute [ Require require, Update update, Ens
                   Nothing -> Nothing
 
     -- Execute a concrete update directly using acid-state
-    execute :: AcidCommand s e Concrete -> m (Acid.EventResult e)
-    execute (AcidCommand e (Var (Concrete (Opaque st)))) = liftIO (Acid.update st e)
+    execute :: AcidCommand s e Concrete -> m (Either TransactionError (Acid.EventResult e))
+    execute (AcidCommand e (Var (Concrete (Opaque st)))) = liftIO ((Right <$> Acid.update st e) `catch` (pure . Left))
 
     -- Shrinking updates requires the state to be open
     require model _ = isOpen model
 
-    -- Updates cause the model state to be updated
-    update (StateOpen s hdl) (AcidCommand c _) _ = StateOpen (execState (lookupMethod c) s) hdl
-    update _                 _                 _ = error "acidUpdate: state not open"
+    -- Updates cause the model state to be updated.  This needs
+    -- 'unsafePerformIO' because the update function must be pure, but
+    -- we need to deal with the possibility of the transaction
+    -- throwing a 'TransactionError' exception, in which case the
+    -- state of the model should not change.
+    update (StateOpen s hdl) (AcidCommand c _) _ =
+        unsafePerformIO $ do
+            s' <- evaluate (execState (lookupMethod c) s)
+                    `catch` \ (_ :: TransactionError) -> return s
+            return (StateOpen s' hdl)
+    update _ _ _ = error "acidUpdate: state not open"
 
     -- Evaluating the update directly on the model value of the old
     -- state should give the same result
-    ensure model _ (AcidCommand c _) o = case modelValue model of
+    ensure model0 model1 (AcidCommand c _) (Left  e) = case (modelValue model0, modelValue model1) of
+      (Just v0, Just v1) -> allow_failure v0 v1 c e
+      _                  -> failure
+    ensure model _ (AcidCommand c _) (Right o) = case modelValue model of
       Just v  -> evalState (lookupMethod c) v === o
       Nothing -> failure
 
 -- | Translate an acid-state query into a command that executes the
--- query, given a generator of inputs.
+-- query, given a generator of inputs.  If the query fails, the
+-- property as a whole fails.
 acidQuery :: forall s e m .
               ( Acid.IsAcidic s
               , Acid.EventState e ~ s
@@ -241,7 +322,44 @@ acidQuery :: forall s e m .
               , Show s
               )
            => Gen e -> Command Gen m (Model s)
-acidQuery gen_event = Command gen execute
+acidQuery = acidQueryCheckFail (\ _ _ _ -> failure)
+
+-- | Translate an acid-state query into a command that executes the
+-- query, given a generator of inputs.  If the query fails, the
+-- property as a whole succeeds.
+acidQueryMayFail :: forall s e m .
+              ( Acid.IsAcidic s
+              , Acid.EventState e ~ s
+              , Acid.QueryEvent e
+              , Show e
+              , Eq (Acid.EventResult e)
+              , Show (Acid.EventResult e)
+              , Typeable (Acid.EventResult e)
+              , MonadIO m
+              , Eq s
+              , Show s
+              )
+           => Gen e -> Command Gen m (Model s)
+acidQueryMayFail = acidQueryCheckFail (\ _ _ _ -> return ())
+
+-- | Translate an acid-state query into a command that executes the
+-- query, given a generator of inputs.  If the query fails, the given
+-- predicate is tested on the state, the event and the
+-- 'TransactionError' exception.
+acidQueryCheckFail :: forall s e m .
+              ( Acid.IsAcidic s
+              , Acid.EventState e ~ s
+              , Acid.QueryEvent e
+              , Show e
+              , Eq (Acid.EventResult e)
+              , Show (Acid.EventResult e)
+              , Typeable (Acid.EventResult e)
+              , MonadIO m
+              , Eq s
+              , Show s
+              )
+           => (s -> e -> TransactionError -> Test ()) -> Gen e -> Command Gen m (Model s)
+acidQueryCheckFail allow_failure gen_event = Command gen execute
    [ Require require
    , Ensure unchanged_model
    , Ensure correct_output
@@ -253,7 +371,8 @@ acidQuery gen_event = Command gen execute
                   Nothing -> Nothing
 
     -- Execute a concrete query directly using acid-state
-    execute (AcidCommand e (Var (Concrete (Opaque st)))) = liftIO (Acid.query st e)
+    execute (AcidCommand e (Var (Concrete (Opaque st)))) =
+        liftIO ((Right <$> (evaluate =<< Acid.query st e)) `catch` (pure . Left))
 
     -- Shrinking queries requires the state to be open
     require model _ = isOpen model
@@ -263,8 +382,10 @@ acidQuery gen_event = Command gen execute
 
     -- Evaluating the query directly on the model value of the old
     -- state should give the same result
-    correct_output model _ (AcidCommand c _) o = case modelValue model of
-      Just v  -> evalState (lookupMethod c) v === o
+    correct_output model _ (AcidCommand c _) r = case modelValue model of
+      Just v  -> case r of
+                   Right o -> evalState (lookupMethod c) v === o
+                   Left e  -> allow_failure v c e
       Nothing -> failure
 
 

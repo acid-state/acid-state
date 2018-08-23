@@ -43,11 +43,26 @@ reverseKey key
          put r
          return r
 
+-- | An update that may fail: reverse the value at the given key, or
+-- fail if it is missing.
+reverseKeyOrFail :: Key -> Update KeyValue ()
+reverseKeyOrFail key
+    = do KeyValue m <- get
+         case Map.lookup key m of
+           Nothing  -> failUpdate "key not in map"
+           Just val -> put (KeyValue (Map.insert key (reverse val) m))
+
 -- | Look up a key from the store.
 lookupKey :: Key -> Query KeyValue (Maybe Value)
 lookupKey key
     = do KeyValue m <- ask
          return (Map.lookup key m)
+
+-- | Look up a key from the store, or fail if it is missing.
+lookupKeyOrFail :: Key -> Query KeyValue Value
+lookupKeyOrFail key
+    = do KeyValue m <- ask
+         maybe (failQuery "key not in map") return (Map.lookup key m)
 
 -- | Query the current value of the state.  This is not used in the
 -- generated commands, but is used for checking the state we get back
@@ -55,20 +70,13 @@ lookupKey key
 askState :: Query KeyValue KeyValue
 askState = ask
 
-$(makeAcidic ''KeyValue ['insertKey, 'reverseKey, 'lookupKey, 'askState])
+$(makeAcidic ''KeyValue ['insertKey, 'reverseKey, 'reverseKeyOrFail, 'lookupKey, 'lookupKeyOrFail, 'askState])
 
 deriving instance Show InsertKey
 deriving instance Show ReverseKey
+deriving instance Show ReverseKeyOrFail
 deriving instance Show LookupKey
-
-genInsertKey :: Gen InsertKey
-genInsertKey = InsertKey <$> genKey <*> genValue
-
-genReverseKey :: Gen ReverseKey
-genReverseKey = ReverseKey <$> genKey
-
-genLookupKey :: Gen LookupKey
-genLookupKey = LookupKey <$> genKey
+deriving instance Show LookupKeyOrFail
 
 genKey :: Gen Key
 genKey = Gen.int (Range.constant 1 10)
@@ -77,9 +85,11 @@ genValue :: Gen Value
 genValue = Gen.string (Range.constant 0 10) Gen.alphaNum
 
 keyValueCommands :: MonadIO m => [Command Gen m (Model KeyValue)]
-keyValueCommands = [ acidUpdate genInsertKey
-                   , acidUpdate genReverseKey
-                   , acidQuery  genLookupKey
+keyValueCommands = [ acidUpdate        (InsertKey        <$> genKey <*> genValue)
+                   , acidUpdate        (ReverseKey       <$> genKey)
+                   , acidUpdateMayFail (ReverseKeyOrFail <$> genKey)
+                   , acidQuery         (LookupKey        <$> genKey)
+                   , acidQueryMayFail  (LookupKeyOrFail  <$> genKey)
                    ]
 
 -- | Possible initial states; because of #20 we can currently only use
