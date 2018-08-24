@@ -462,12 +462,16 @@ acidStateSequentialProperty i gen_initial_state range commands = property $ do
 --
 -- Note that if the generator for initial values can return more than
 -- one result, this will fail due to #20.
+--
+-- The state cannot be opened twice in parallel, so the length of the
+-- sequential prefix must be at least 1, so that the open command
+-- happens exactly once.
 acidStateParallelProperty :: AcidStateInterface s -> Gen s -> Range Int -> Range Int -> [Command Gen (TestT IO) (Model s)] -> Property
 acidStateParallelProperty i gen_initial_state prefix_range parallel_range commands = property $ do
     actions <- forAll $ Gen.parallel prefix_range parallel_range StateAbsent $
                  [ open i gen_initial_state
                  , checkpoint i
-                 ] ++ commands
+                 ] ++ commands ++ commands
     test $ do liftIO $ resetState i
               executeParallel StateAbsent actions
 
