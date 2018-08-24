@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -7,6 +8,8 @@
 -- implements a simple key-value store.
 module Data.Acid.KeyValueStateMachine (tests) where
 
+import           Control.DeepSeq
+import           Control.Exception
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Acid
@@ -14,6 +17,7 @@ import           Data.Acid.StateMachineTest
 import           Data.SafeCopy
 import qualified Data.Map as Map
 import           Data.Typeable
+import           GHC.Generics
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
@@ -45,12 +49,24 @@ reverseKey key
 
 -- | An update that may fail: reverse the value at the given key, or
 -- fail if it is missing.
-reverseKeyOrFail :: Key -> Update KeyValue ()
-reverseKeyOrFail key
+reverseKeyOrFail :: Key -> Bomb -> Update KeyValue ()
+reverseKeyOrFail key _
     = do KeyValue m <- get
          case Map.lookup key m of
            Nothing  -> failUpdate "key not in map"
            Just val -> put (KeyValue (Map.insert key (reverse val) m))
+
+-- | An update that attempts to put an undefined state.  This transaction should
+-- simply fail and not modify the state.
+breakState :: Update KeyValue ()
+breakState = put (throw (TransactionError "broken state"))
+
+-- | An update that puts a partially-defined state.  Unfortunately
+-- acid-state does not handle this case gracefully, and will fail with
+-- 'BlockedIndefinitelyOnMVar' (see #38).  Thus this update is not
+-- included in 'keyValueCommands' below.
+breakState2 :: Update KeyValue ()
+breakState2 = put (KeyValue (Map.singleton 1 (throw (TransactionError "broken state"))))
 
 -- | Look up a key from the store.
 lookupKey :: Key -> Query KeyValue (Maybe Value)
@@ -59,8 +75,8 @@ lookupKey key
          return (Map.lookup key m)
 
 -- | Look up a key from the store, or fail if it is missing.
-lookupKeyOrFail :: Key -> Query KeyValue Value
-lookupKeyOrFail key
+lookupKeyOrFail :: Key -> Bomb -> Query KeyValue Value
+lookupKeyOrFail key _
     = do KeyValue m <- ask
          maybe (failQuery "key not in map") return (Map.lookup key m)
 
@@ -70,13 +86,28 @@ lookupKeyOrFail key
 askState :: Query KeyValue KeyValue
 askState = ask
 
-$(makeAcidic ''KeyValue ['insertKey, 'reverseKey, 'reverseKeyOrFail, 'lookupKey, 'lookupKeyOrFail, 'askState])
+$(makeAcidic ''KeyValue ['insertKey, 'reverseKey, 'reverseKeyOrFail, 'breakState, 'breakState2, 'lookupKey, 'lookupKeyOrFail, 'askState])
+
+deriving instance Generic InsertKey
+deriving instance Generic ReverseKey
+deriving instance Generic ReverseKeyOrFail
+deriving instance Generic BreakState
+deriving instance Generic LookupKey
+deriving instance Generic LookupKeyOrFail
 
 deriving instance Show InsertKey
 deriving instance Show ReverseKey
 deriving instance Show ReverseKeyOrFail
+deriving instance Show BreakState
 deriving instance Show LookupKey
 deriving instance Show LookupKeyOrFail
+
+instance NFData InsertKey
+instance NFData ReverseKey
+instance NFData ReverseKeyOrFail
+instance NFData BreakState
+instance NFData LookupKey
+instance NFData LookupKeyOrFail
 
 genKey :: Gen Key
 genKey = Gen.int (Range.constant 1 10)
@@ -87,9 +118,10 @@ genValue = Gen.string (Range.constant 0 10) Gen.alphaNum
 keyValueCommands :: MonadIO m => [Command Gen m (Model KeyValue)]
 keyValueCommands = [ acidUpdate        (InsertKey        <$> genKey <*> genValue)
                    , acidUpdate        (ReverseKey       <$> genKey)
-                   , acidUpdateMayFail (ReverseKeyOrFail <$> genKey)
+                   , acidUpdateMayFail (ReverseKeyOrFail <$> genKey <*> genBomb)
+                   , acidUpdateMayFail (pure BreakState)
                    , acidQuery         (LookupKey        <$> genKey)
-                   , acidQueryMayFail  (LookupKeyOrFail  <$> genKey)
+                   , acidQueryMayFail  (LookupKeyOrFail  <$> genKey <*> genBomb)
                    ]
 
 -- | Possible initial states; because of #20 we can currently only use

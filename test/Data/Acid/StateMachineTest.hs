@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | This module provides a general framework for state-machine testing of
@@ -27,11 +28,17 @@ module Data.Acid.StateMachineTest
   , checkpointClose
   , kill
 
+    -- * Testing exceptions
   , TransactionError(..)
   , failQuery
   , failUpdate
+  , Bomb(..)
+  , explodeWHNF
+  , explodeNF
+  , genBomb
   ) where
 
+import           Control.DeepSeq
 import           Control.Exception (Exception, IOException, throw, catch, evaluate)
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -71,6 +78,38 @@ failQuery s = throw (TransactionError s)
 -- 'acidUpdateMayFail' and 'acidUpdateCheckFail'.
 failUpdate :: String -> Acid.Update s a
 failUpdate s = throw (TransactionError s)
+
+-- | Container for exceptions thrown from pure code.  This is
+-- intended for use as an argument to transactions, for testing
+-- transactions that cannot be serialised.
+data Bomb = Bomb { unBomb :: Int }
+
+instance NFData Bomb where
+  rnf (Bomb n) = rnf n
+
+-- | Slightly hacky 'Show' instance that will attempt to show
+-- something sensible even if evaluating the 'Bomb' throws an
+-- exception.
+instance Show Bomb where
+  show b = "(Bomb " ++ s ++ ")"
+    where
+      s = unsafePerformIO $ evaluate (show (unBomb b)) `catch` \ TransactionError{} -> return "(exploded)"
+
+-- | Throw an exception when evaluated to WHNF.
+explodeWHNF :: Bomb
+explodeWHNF = throw (TransactionError "boom!")
+
+-- | Throw an exception when evaluated to NF (but not when
+-- evaluated to WHNF).
+explodeNF :: Bomb
+explodeNF = Bomb (throw (TransactionError "boom!"))
+
+-- | Generate a bomb that may or may not explode (throw an exception)
+-- when evaluated.
+genBomb :: Gen Bomb
+genBomb = Gen.element [Bomb 0, Bomb 1, Bomb 2, Bomb 3, explodeWHNF, explodeNF]
+
+$(SafeCopy.deriveSafeCopy 0 'SafeCopy.base ''Bomb)
 
 
 -- | Model of an acid-state component, for state machine property
@@ -230,6 +269,7 @@ acidUpdate :: forall s e m .
               , Acid.EventState e ~ s
               , Acid.UpdateEvent e
               , Show e
+              , NFData e
               , Eq (Acid.EventResult e)
               , Show (Acid.EventResult e)
               , Typeable (Acid.EventResult e)
@@ -246,6 +286,7 @@ acidUpdateMayFail :: forall s e m .
               , Acid.EventState e ~ s
               , Acid.UpdateEvent e
               , Show e
+              , NFData e
               , Eq (Acid.EventResult e)
               , Show (Acid.EventResult e)
               , Typeable (Acid.EventResult e)
@@ -263,6 +304,7 @@ acidUpdateCheckFail :: forall s e m .
               , Acid.EventState e ~ s
               , Acid.UpdateEvent e
               , Show e
+              , NFData e
               , Eq (Acid.EventResult e)
               , Show (Acid.EventResult e)
               , Typeable (Acid.EventResult e)
@@ -289,10 +331,13 @@ acidUpdateCheckFail allow_failure gen_event = Command gen execute [ Require requ
     -- 'unsafePerformIO' because the update function must be pure, but
     -- we need to deal with the possibility of the transaction
     -- throwing a 'TransactionError' exception, in which case the
-    -- state of the model should not change.
+    -- state of the model should not change.  We need to deepseq the
+    -- update event itself, in case it contains a nested error that
+    -- will show up during serialisation but is not forced by
+    -- executing the transaction.
     update (StateOpen s hdl) (AcidCommand c _) _ =
         unsafePerformIO $ do
-            s' <- evaluate (execState (lookupMethod c) s)
+            s' <- evaluate (c `deepseq` execState (lookupMethod c) s)
                     `catch` \ (_ :: TransactionError) -> return s
             return (StateOpen s' hdl)
     update _ _ _ = error "acidUpdate: state not open"
