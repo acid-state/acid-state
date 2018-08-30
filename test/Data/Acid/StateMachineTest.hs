@@ -39,7 +39,7 @@ module Data.Acid.StateMachineTest
   ) where
 
 import           Control.DeepSeq
-import           Control.Exception (Exception, IOException, throw, catch, evaluate)
+import           Control.Exception (Exception, IOException, throw, catch, try, evaluate)
 import           Control.Monad.Reader
 import           Control.Monad.State
 import qualified Data.Acid as Acid
@@ -183,7 +183,8 @@ instance HTraversable (Open s) where
 -- | Command to open the state, given the interface to use and a
 -- generator for possible initial state values.
 open :: MonadIO m => AcidStateInterface s -> Gen s -> Command Gen m (Model s)
-open AcidStateInterface{..} gen_initial_state = Command gen execute [ Require require, Update update ]
+open AcidStateInterface{..} gen_initial_state =
+    Command gen execute [ Require require, Update update ]
   where
     require model _ = not (isOpen model)
 
@@ -209,7 +210,8 @@ genWithState l model = pure . WithState l <$> modelHandle model
 
 -- | Command to close the state.
 close :: MonadIO m => AcidStateInterface s -> Command Gen m (Model s)
-close AcidStateInterface{..} = Command (genWithState "Close") execute [ Require require, Update update ]
+close AcidStateInterface{..} =
+    Command (genWithState "Close") execute [ Require require, Update update ]
   where
     require model _ = isOpen model
 
@@ -219,7 +221,8 @@ close AcidStateInterface{..} = Command (genWithState "Close") execute [ Require 
 
 -- | Command to take a checkpoint of the state.
 checkpoint :: MonadIO m => AcidStateInterface s -> Command Gen m (Model s)
-checkpoint AcidStateInterface{..} = Command (genWithState "checkpoint") execute [ Require require ]
+checkpoint AcidStateInterface{..} =
+    Command (genWithState "checkpoint") execute [ Require require ]
   where
     require model _ = isOpen model
     execute (WithState _ (Var (Concrete (Opaque st)))) = liftIO (checkpointState st)
@@ -240,7 +243,8 @@ checkpointClose AcidStateInterface{..} =
 -- The lock file is removed so that the state can be reopened
 -- (otherwise further commands would immediately fail).
 kill :: MonadIO m => AcidStateInterface s -> Command Gen m (Model s)
-kill AcidStateInterface{..} = Command (genWithState "kill") execute [ Require require, Update update ]
+kill AcidStateInterface{..} =
+    Command (genWithState "kill") execute [ Require require, Update update ]
   where
     require model _ = isOpen model
     execute WithState{} = liftIO $ removeFile (statePath ++ "/open.lock")
@@ -254,12 +258,6 @@ data AcidCommand s e (v :: * -> *) = AcidCommand e (Var (Opaque (Acid.AcidState 
 
 instance HTraversable (AcidCommand s e) where
   htraverse k (AcidCommand e s) = AcidCommand e <$> htraverse k s
-
-lookupMethod :: (Core.Method m, Acid.IsAcidic (Core.MethodState m))
-             => m -> State (Core.MethodState m) (Core.MethodResult m)
-lookupMethod m = Core.lookupHotMethod mmap m
-  where
-    mmap = Core.mkMethodMap (Common.eventsToMethods Common.acidEvents)
 
 -- | Translate an acid-state update into a command that executes the
 -- update, given a generator of inputs.  If the update fails, the
@@ -312,7 +310,8 @@ acidUpdateCheckFail :: forall s e m .
               )
            => (s -> s -> e -> TransactionError -> Test ())
            -> Gen e -> Command Gen m (Model s)
-acidUpdateCheckFail allow_failure gen_event = Command gen execute [ Require require, Update update, Ensure ensure ]
+acidUpdateCheckFail allow_failure gen_event =
+    Command gen execute [ Require require, Update update, Ensure ensure ]
   where
     -- Generate updates only when state is open
     gen :: Model s Symbolic -> Maybe (Gen (AcidCommand s e Symbolic))
@@ -322,9 +321,10 @@ acidUpdateCheckFail allow_failure gen_event = Command gen execute [ Require requ
 
     -- Execute a concrete update directly using acid-state
     execute :: AcidCommand s e Concrete -> m (Either TransactionError (Acid.EventResult e))
-    execute (AcidCommand e (Var (Concrete (Opaque st)))) = liftIO ((Right <$> Acid.update st e) `catch` (pure . Left))
+    execute (AcidCommand e (Var (Concrete (Opaque st)))) = liftIO (try (Acid.update st e))
 
     -- Shrinking updates requires the state to be open
+    require :: Model s Symbolic -> AcidCommand s e Symbolic -> Bool
     require model _ = isOpen model
 
     -- Updates cause the model state to be updated.  This needs
@@ -335,6 +335,10 @@ acidUpdateCheckFail allow_failure gen_event = Command gen execute [ Require requ
     -- update event itself, in case it contains a nested error that
     -- will show up during serialisation but is not forced by
     -- executing the transaction.
+    update :: Model s v
+           -> AcidCommand s e v
+           -> Var (Either TransactionError (Acid.EventResult e)) v
+           -> Model s v
     update (StateOpen s hdl) (AcidCommand c _) _ =
         unsafePerformIO $ do
             s' <- evaluate (c `deepseq` execState (lookupMethod c) s)
@@ -344,6 +348,11 @@ acidUpdateCheckFail allow_failure gen_event = Command gen execute [ Require requ
 
     -- Evaluating the update directly on the model value of the old
     -- state should give the same result
+    ensure :: Model s Concrete
+           -> Model s Concrete
+           -> AcidCommand s e Concrete
+           -> Either TransactionError (Acid.EventResult e)
+           -> Test ()
     ensure model0 model1 (AcidCommand c _) (Left  e) = case (modelValue model0, modelValue model1) of
       (Just v0, Just v1) -> allow_failure v0 v1 c e
       _                  -> failure
@@ -417,7 +426,7 @@ acidQueryCheckFail allow_failure gen_event = Command gen execute
 
     -- Execute a concrete query directly using acid-state
     execute (AcidCommand e (Var (Concrete (Opaque st)))) =
-        liftIO ((Right <$> (evaluate =<< Acid.query st e)) `catch` (pure . Left))
+        liftIO (try (evaluate =<< Acid.query st e))
 
     -- Shrinking queries requires the state to be open
     require model _ = isOpen model
@@ -432,6 +441,14 @@ acidQueryCheckFail allow_failure gen_event = Command gen execute
                    Right o -> evalState (lookupMethod c) v === o
                    Left e  -> allow_failure v c e
       Nothing -> failure
+
+-- | Extract the underlying method implementation in the pure 'State'
+-- monad for an acid-state query or update.
+lookupMethod :: (Core.Method m, Acid.IsAcidic (Core.MethodState m))
+             => m -> State (Core.MethodState m) (Core.MethodResult m)
+lookupMethod m = Core.lookupHotMethod mmap m
+  where
+    mmap = Core.mkMethodMap (Common.eventsToMethods Common.acidEvents)
 
 
 -- | Test the sequential property (agreement between model and
