@@ -2,7 +2,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies       #-}
 
-module Main (main) where
+module StressTestNoTH (main) where
 
 import           Data.Acid
 import           Data.Acid.Advanced

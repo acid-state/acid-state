@@ -2,7 +2,7 @@
 {-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
-module Main (main) where
+module Proxy (main) where
 
 import           Data.Acid
 import           Data.Acid.Advanced   (scheduleUpdate)

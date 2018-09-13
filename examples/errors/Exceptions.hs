@@ -2,13 +2,14 @@
 {-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
-module Main (main) where
+module Exceptions (main, test) where
 
 import           Data.Acid
 import           Data.Acid.Local     (createCheckpointAndClose)
 
 import           Control.Monad.State
 import           Data.SafeCopy
+import           System.Directory
 import           System.Environment
 
 import           Data.Typeable
@@ -70,7 +71,40 @@ main = do acid <- openLocalStateFrom "state/Exceptions" (MyState 0)
             ["6"] -> update acid (StateNestedError2 (error "nested state error (2)"))
             _     -> do putStrLn "Call with [123456] to test error scenarios."
                         putStrLn "If the tick doesn't get stuck, everything is fine."
-                        n <- update acid Tick
-                        putStrLn $ "Tick: " ++ show n
+                        do_tick acid
            `catch` \e -> do putStrLn $ "Caught exception: " ++ show (e:: SomeException)
                             createCheckpointAndClose acid
+
+do_tick :: AcidState MyState -> IO ()
+do_tick acid = do n <- update acid Tick
+                  putStrLn $ "Tick: " ++ show n
+
+test :: IO ()
+test = do putStrLn "Exceptions test"
+          exists <- doesDirectoryExist fp
+          when exists $ removeDirectoryRecursive fp
+          acid <- openLocalStateFrom fp (MyState 0)
+          do_tick acid
+          handle hdl $ update acid (undefined :: FailEvent)
+          do_tick acid
+          handle hdl $ update acid FailEvent
+          do_tick acid
+          handle hdl $ update acid ErrorEvent
+          do_tick acid
+          handle hdl $ update acid StateError
+          do_tick acid
+          -- We can't currently cope with an error being thrown during serialization of the state (see #38)
+          -- handle hdl $ update acid StateNestedError1
+          do_tick acid
+          handle hdl $ update acid (StateNestedError2 (error "nested state error (2)"))
+          do_tick acid
+          n <- update acid Tick
+          unless (n == expected_n) $ error $ "Wrong tick value, expected " ++ show expected_n
+          createCheckpointAndClose acid
+          putStrLn "Exceptions done"
+  where
+    fp = "state/Exceptions"
+
+    hdl e = putStrLn $ "Caught exception: " ++ show (e:: SomeException)
+
+    expected_n = 7

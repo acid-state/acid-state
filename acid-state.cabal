@@ -115,6 +115,36 @@ test-suite state-machine
   if flag(skip-state-machine-test)
     buildable: False
 
+test-suite examples
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      examples
+                       examples/errors
+  main-is:             Examples.hs
+  build-depends:       base
+                     , acid-state
+                     , containers
+                     , directory
+                     , mtl
+                     , network
+                     , safecopy
+                     , time
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  other-modules:       CheckpointCutsEvent
+                       Exceptions
+                       HelloDatabase
+                       HelloWorld
+                       HelloWorldNoTH
+                       KeyValue
+                       KeyValueNoTH
+                       Proxy
+                       RemoteClient
+                       RemoteCommon
+                       RemoteServer
+                       RemoveEvent
+                       SlowCheckpoint
+                       StressTest
+                       StressTestNoTH
+  default-language:    Haskell2010
 
 benchmark loading-benchmark
   type:

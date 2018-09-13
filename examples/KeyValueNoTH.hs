@@ -2,7 +2,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies       #-}
 
-module Main (main) where
+module KeyValueNoTH (main) where
 
 import           Data.Acid
 import           Data.Acid.Advanced
