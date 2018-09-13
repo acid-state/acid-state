@@ -21,6 +21,7 @@ files should contain 10 checkpoints each.
 module CheckpointCutsEvent (main) where
 
 -- import           Control.Concurrent
+import           Control.Applicative
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Acid
