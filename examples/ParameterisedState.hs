@@ -1,6 +1,9 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module ParameterisedState (main) where
 
@@ -10,6 +13,7 @@ import Data.Acid
 import qualified Data.Map as Map
 import Data.SafeCopy (SafeCopy(..), deriveSafeCopy, base)
 import Data.Serialize
+import Data.Typeable
 import GHC.Generics
 
 data Entry k = Entry
@@ -24,6 +28,10 @@ $(deriveSafeCopy 0 'base ''Entry)
 
 newtype Store k = Store { store :: Map.Map k (Entry k) }
     deriving (Eq, Generic)
+
+#if __GLASGOW_HASKELL__ <= 708
+deriving instance Typeable1 Store
+#endif
 
 instance (Ord k, Serialize k) => SafeCopy (Store k)
 instance (Ord k, Serialize k) => Serialize (Store k)
