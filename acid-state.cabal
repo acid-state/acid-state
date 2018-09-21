@@ -10,20 +10,33 @@ Maintainer:          Lemmih <lemmih@gmail.com>
 Category:            Database
 Build-type:          Simple
 Cabal-version:       >=1.10
-tested-with:         GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3, GHC == 8.0.1, GHC == 8.2.2, GHC == 8.4.1
+tested-with:         GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3, GHC == 8.0.2, GHC == 8.2.2, GHC == 8.4.3
 Extra-source-files:
         CHANGELOG.md
         examples/*.hs
         examples/errors/*.hs
         src-win32/*.hs
         src-unix/*.hs
+        test-state/OldStateTest1/*.log
+        test-state/OldStateTest1/*.version
+        test-state/OldStateTest2/*.log
+        test-state/OldStateTest2/*.version
+        test-state/OldStateTest3/*.log
+        test-state/OldStateTest3/*.version
 
 Source-repository head
   type:          git
   location:      https://github.com/acid-state/acid-state
 
+flag skip-state-machine-test
+  description: If enabled, do not build/run the state-machine test
+  default: False
+  manual: True
+
 Library
   Exposed-Modules:     Data.Acid,
+                       Data.Acid.Archive,
+                       Data.Acid.Common,
                        Data.Acid.Local, Data.Acid.Memory,
                        Data.Acid.Memory.Pure, Data.Acid.Remote,
                        Data.Acid.Advanced,
@@ -31,9 +44,8 @@ Library
                        Data.Acid.Abstract, Data.Acid.Core,
                        Data.Acid.TemplateHaskell
 
-  Other-modules:       Data.Acid.Archive,
-                       Paths_acid_state,
-                       Data.Acid.Common, FileIO
+  Other-modules:       Paths_acid_state,
+                       FileIO
 
   Build-depends:       array,
                        base >= 4.5.1.0 && < 5,
@@ -83,6 +95,56 @@ test-suite specs
   other-modules:       Data.Acid.TemplateHaskellSpec
   default-language:    Haskell2010
 
+test-suite state-machine
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             StateMachine.hs
+  build-depends:       base
+                     , acid-state
+                     , containers
+                     , deepseq >= 1.4.0.0
+                     , directory
+                     , hedgehog
+                     , mtl
+                     , safecopy
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -Wall
+  other-modules:       Data.Acid.KeyValueStateMachine
+                       Data.Acid.StateMachineTest
+  default-language:    Haskell2010
+
+  if flag(skip-state-machine-test)
+    buildable: False
+
+test-suite examples
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      examples
+                       examples/errors
+  main-is:             Examples.hs
+  build-depends:       base
+                     , acid-state
+                     , containers
+                     , directory
+                     , mtl
+                     , network
+                     , safecopy
+                     , time
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  other-modules:       CheckpointCutsEvent
+                       Exceptions
+                       HelloDatabase
+                       HelloWorld
+                       HelloWorldNoTH
+                       KeyValue
+                       KeyValueNoTH
+                       Proxy
+                       RemoteClient
+                       RemoteCommon
+                       RemoteServer
+                       RemoveEvent
+                       SlowCheckpoint
+                       StressTest
+                       StressTestNoTH
+  default-language:    Haskell2010
 
 benchmark loading-benchmark
   type:

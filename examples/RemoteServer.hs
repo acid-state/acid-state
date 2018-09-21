@@ -1,4 +1,4 @@
-module Main where
+module RemoteServer where
 
 import           Control.Exception (bracket)
 import           Data.Acid         (closeAcidState, openLocalState)

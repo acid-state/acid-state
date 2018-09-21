@@ -2,7 +2,7 @@
 {-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
-module Main (main) where
+module KeyValue (main) where
 
 import           Data.Acid
 import           Data.Acid.Remote

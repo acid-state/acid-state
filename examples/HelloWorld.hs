@@ -2,7 +2,7 @@
 {-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
-module Main (main) where
+module HelloWorld (main) where
 
 import           Control.Monad.Reader
 import           Control.Monad.State

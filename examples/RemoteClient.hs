@@ -1,4 +1,4 @@
-module Main (main) where
+module RemoteClient (main) where
 
 import           Control.Monad.Reader
 import           Data.Acid
