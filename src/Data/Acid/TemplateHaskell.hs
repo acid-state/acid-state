@@ -418,7 +418,7 @@ analyseType eventName t = go [] [] [] t
         | [] <- queries, [(cx, stateType)] <- updates
             = TypeAnalysis
                 { tyvars,  argumentTypes , stateType, resultType
-                , isUpdate = False
+                , isUpdate = True
                 , context = delete cx cxt
                 }
 
