@@ -61,6 +61,19 @@ spec = do
                     , isUpdate = False
                     }
 
+        it "can work with the Update type" $ do
+            typ <- runQ [t| Int -> Update String Char |]
+
+            analyseType name typ
+                `shouldBe` TypeAnalysis
+                    { tyvars = []
+                    , context = []
+                    , argumentTypes = [ConT ''Int]
+                    , stateType = ConT ''String
+                    , resultType = ConT ''Char
+                    , isUpdate = True
+                    }
+
         it "can work with MonadReader" $ do
             typ <- runQ [t| forall m. (MonadReader Int m) => Int -> m () |]
             analyseType name typ
@@ -71,6 +84,18 @@ spec = do
                     , stateType = ConT ''Int
                     , resultType = TupleT 0
                     , isUpdate = False
+                    }
+
+        it "can work with MonadState" $ do
+            typ <- runQ [t| forall m. (MonadState Int m) => Int -> m () |]
+            analyseType name typ
+                `shouldBe` TypeAnalysis
+                    { tyvars = []
+                    , context = []
+                    , argumentTypes = [ConT ''Int]
+                    , stateType = ConT ''Int
+                    , resultType = TupleT 0
+                    , isUpdate = True
                     }
 
         it "can work with many type variables (note that eventCxts later rejects this)" $ do
