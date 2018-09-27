@@ -137,6 +137,7 @@ test-suite examples
                        HelloWorldNoTH
                        KeyValue
                        KeyValueNoTH
+                       MonadStateConstraint
                        ParameterisedState
                        Proxy
                        RemoteClient
