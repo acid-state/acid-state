@@ -130,7 +130,8 @@ test-suite examples
                      , safecopy
                      , time
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  other-modules:       CheckpointCutsEvent
+  other-modules:       ChangeState
+                       CheckpointCutsEvent
                        Exceptions
                        HelloDatabase
                        HelloWorld
