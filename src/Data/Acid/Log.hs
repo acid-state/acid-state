@@ -321,7 +321,7 @@ newestEntry identifier = do
 pushEntry :: SafeCopy object => FileLog object -> object -> IO () -> IO ()
 pushEntry fLog object finally = atomically $ do
   tid <- readTVar (logNextEntryId fLog)
-  writeTVar (logNextEntryId fLog) (tid+1)
+  writeTVar (logNextEntryId fLog) $! tid+1
   (entries, actions) <- readTVar (logQueue fLog)
   writeTVar (logQueue fLog) ( encoded : entries, finally : actions )
  where
