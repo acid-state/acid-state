@@ -124,9 +124,11 @@ test-suite examples
                      , mtl
                      , network
                      , safecopy
+                     , text
                      , time
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   other-modules:       ChangeState
+                       ChangeVersion
                        CheckpointCutsEvent
                        Exceptions
                        HelloDatabase
