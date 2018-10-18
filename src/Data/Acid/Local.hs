@@ -214,6 +214,21 @@ createCheckpointAndClose abstract_state
 
 data Checkpoint s = Checkpoint EntryId s
 
+-- | Previous versions of @acid-state@ had
+--
+-- > data Checkpoint = Checkpoint EntryId ByteString
+--
+-- where the 'ByteString' is the @safecopy@-serialization of the
+-- original checkpoint data.  Thus we give a 'SafeCopy' instance that
+-- is backwards-compatible with this by making nested calls to
+-- 'safePut' and 'safeGet'.
+--
+-- Note that if the inner data cannot be deserialised, 'getCopy' will
+-- not report an error immediately but will return a 'Checkpoint'
+-- whose payload is an error thunk.  This means consumers can skip
+-- deserialising intermediate checkpoint data when they care only
+-- about the last checkpoint in a file.  However, they must be sure to
+-- force the returned data promptly.
 instance SafeCopy s => SafeCopy (Checkpoint s) where
     kind = primitive
     putCopy (Checkpoint eventEntryId content)
@@ -369,7 +384,9 @@ resumeLocalStateFrom directory initialState delayLocking serialisationLayer =
       case mbLastCheckpoint of
         Nothing ->
           return (0, initialState)
-        Just (Checkpoint eventCutOff val) ->
+        Just (Checkpoint eventCutOff !val) ->
+          -- N.B. We must be strict in val so that we force any
+          -- lurking deserialisation error immediately.
           return (eventCutOff, val)
     replayEvents lock n st = do
       core <- mkCore (eventsToMethods acidEvents) st
