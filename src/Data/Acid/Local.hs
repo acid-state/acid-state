@@ -214,30 +214,17 @@ createCheckpointAndClose abstract_state
 
 data Checkpoint s = Checkpoint EntryId s
 
--- | Previous versions of @acid-state@ had
---
--- > data Checkpoint = Checkpoint EntryId ByteString
---
--- where the 'ByteString' is the @safecopy@-serialization of the
--- original checkpoint data.  Thus we give a 'SafeCopy' instance that
--- is backwards-compatible with this by making nested calls to
--- 'safePut' and 'safeGet'.
 instance SafeCopy s => SafeCopy (Checkpoint s) where
     kind = primitive
     putCopy (Checkpoint eventEntryId content)
         = contain $
           do safePut eventEntryId
              safePut (runPutLazy (safePut content))
-    getCopy = contain $ Checkpoint <$> safeGet <*> safeGetNested
+    getCopy = contain $ Checkpoint <$> safeGet <*> (fromNested <$> safeGet)
       where
-        -- N.B. We must be sufficiently strict here: if the nested
-        -- bytestring fails to deserialize we must throw an error
-        -- immediately rather than creating a 'Checkpoint' containing
-        -- an error thunk.
-        safeGetNested = do b <- safeGet
-                           case runGetLazy safeGet b of
-                             Left msg -> checkpointRestoreError msg
-                             Right v  -> return v
+        fromNested b = case runGetLazy safeGet b of
+                         Left msg -> checkpointRestoreError msg
+                         Right v  -> v
 
 
 -- | Create an AcidState given an initial value.
