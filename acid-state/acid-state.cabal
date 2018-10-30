@@ -87,6 +87,7 @@ test-suite state-machine
   main-is:             StateMachine.hs
   build-depends:       base
                      , acid-state
+                     , acid-state-tests == 0.15.0
                      , containers
                      , deepseq >= 1.4.0.0
                      , directory
