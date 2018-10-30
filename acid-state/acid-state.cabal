@@ -32,18 +32,21 @@ flag skip-state-machine-test
 Library
   Exposed-Modules:     Data.Acid,
                        Data.Acid.Archive,
-                       Data.Acid.Common,
-                       Data.Acid.Local, Data.Acid.Memory,
-                       Data.Acid.Memory.Pure, Data.Acid.Remote,
+                       Data.Acid.Local,
+                       Data.Acid.Remote,
                        Data.Acid.Advanced,
-                       Data.Acid.Log, Data.Acid.CRC,
-                       Data.Acid.Abstract, Data.Acid.Core,
+                       Data.Acid.Core,
                        Data.Acid.TemplateHaskell
 
-  Other-modules:       Paths_acid_state,
-                       FileIO
+  Reexported-modules:  Data.Acid.Abstract,
+                       Data.Acid.Common,
+                       Data.Acid.CRC,
+                       Data.Acid.Log,
+                       Data.Acid.Memory,
+                       Data.Acid.Memory.Pure
 
-  Build-depends:       array,
+  Build-depends:       acid-state-internal == 0.15.0,
+                       array,
                        base >= 4.5.1.0 && < 5,
                        bytestring >= 0.10.2,
                        cereal >= 0.4.1.0,
@@ -55,21 +58,9 @@ Library
                        filepath,
                        mtl,
                        network < 2.9,
-                       template-haskell,
-                       th-expand-syns
-
-  if os(windows)
-     Build-depends:       Win32
-  else
-     Build-depends:       unix
+                       template-haskell
 
   Hs-Source-Dirs:      src/
-
-  if os(windows)
-     Hs-Source-Dirs:   src-win32/
-  else
-     Hs-Source-Dirs:   src-unix/
-
   default-language:    Haskell2010
   GHC-Options:         -fwarn-unused-imports -fwarn-unused-binds
 

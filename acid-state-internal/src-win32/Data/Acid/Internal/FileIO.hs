@@ -1,4 +1,4 @@
-module FileIO(FHandle,open,write,flush,close) where
+module Data.Acid.Internal.FileIO(FHandle,open,write,flush,close) where
 import System.Win32(HANDLE,
                     createFile,
                     gENERIC_WRITE,

@@ -14,7 +14,7 @@ module Data.Acid.Memory
     ( openMemoryState
     ) where
 
-import Data.Acid.Core
+import Data.Acid.Internal.Core
 import Data.Acid.Common
 import Data.Acid.Abstract
 

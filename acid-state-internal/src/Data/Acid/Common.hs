@@ -11,7 +11,7 @@
 --
 module Data.Acid.Common where
 
-import Data.Acid.Core
+import Data.Acid.Internal.Core
 
 import Control.Monad.State
 import Control.Monad.Reader

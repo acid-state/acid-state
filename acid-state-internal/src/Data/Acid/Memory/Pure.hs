@@ -29,7 +29,7 @@ module Data.Acid.Memory.Pure
     , runQuery
     ) where
 
-import Data.Acid.Core
+import Data.Acid.Internal.Core
 import Data.Acid.Common
 
 import Control.Monad.State

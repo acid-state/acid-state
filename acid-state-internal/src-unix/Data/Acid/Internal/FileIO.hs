@@ -1,5 +1,5 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
-module FileIO(FHandle,open,write,flush,close) where
+module Data.Acid.Internal.FileIO(FHandle,open,write,flush,close) where
 import System.Posix(Fd(Fd),
                     openFd,
                     fdWriteBuf,

@@ -20,12 +20,12 @@ module Data.Acid.Log
     , archiveFileLog
     ) where
 
-import Data.Acid.Archive (Archiver(..), Entries(..), entriesToList)
-import Data.Acid.Core
+import Data.Acid.Internal.Archive (Archiver(..), Entries(..), entriesToList)
+import Data.Acid.Internal.Core
+import Data.Acid.Internal.FileIO
 import System.Directory
 import System.FilePath
 import System.IO
-import FileIO
 
 import Foreign.Ptr
 import Control.Monad
@@ -39,7 +39,7 @@ import Data.Maybe
 import Data.Monoid                               ((<>))
 import Text.Printf                               ( printf )
 
-import Paths_acid_state                          ( version )
+import Paths_acid_state_internal                 ( version )
 import Data.Version                              ( showVersion )
 import Control.Exception                         ( handle, IOException )
 

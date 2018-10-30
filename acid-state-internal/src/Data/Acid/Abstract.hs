@@ -12,7 +12,7 @@ module Data.Acid.Abstract
     ) where
 
 import Data.Acid.Common
-import Data.Acid.Core
+import Data.Acid.Internal.Core
 
 import Control.Concurrent      ( MVar, takeMVar )
 import Data.ByteString.Lazy    ( ByteString )
