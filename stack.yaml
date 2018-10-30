@@ -1,5 +1,5 @@
 packages:
-    - .
+    - acid-state
 
 resolver: lts-11.15
 
