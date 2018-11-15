@@ -58,6 +58,16 @@ data AcidState st
 --
 --   This call will not return until the operation has succeeded.
                 createCheckpoint :: IO ()
+              ,
+-- | Save a snapshot to disk and close the AcidState as a single
+--   atomic action, if supported by the backend. This is useful when
+--   you want to make sure that no events are saved to disk after a
+--   checkpoint.
+--
+--   This is supported for the Local backend.  For the Remote and
+--   Memory backends, this is equivalent to calling 'createCheckpoint'
+--   followed by 'closeAcidState', without atomicity guarantees.
+                createCheckpointAndClose :: IO ()
 -- | Move all log files that are no longer necessary for state restoration into the 'Archive'
 --   folder in the state directory. This folder can then be backed up or thrown out as you see fit.
 --   Reverting to a state before the last checkpoint will not be possible if the 'Archive' folder
