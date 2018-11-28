@@ -48,7 +48,6 @@ Library
                        bytestring >= 0.10.2,
                        cereal >= 0.4.1.0,
                        containers,
-                       extensible-exceptions,
                        safecopy >= 0.6,
                        stm >= 2.4,
                        directory,
