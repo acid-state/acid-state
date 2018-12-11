@@ -132,7 +132,7 @@ downcast AcidState{acidSubState = AnyState sub}
          Just (Just x) -> x
          _ ->
            error $
-            "Data.Acid: Invalid subtype cast: " ++ show (typeOf sub) ++ " -> " ++ show (typeOf r)
+            "Data.Acid.Abstract: Invalid subtype cast: " ++ show (typeOf sub) ++ " -> " ++ show (typeOf r)
 #else
 downcast :: Typeable1 sub => AcidState st -> sub st
 downcast AcidState{acidSubState = AnyState sub}
@@ -142,5 +142,5 @@ downcast AcidState{acidSubState = AnyState sub}
          Just (Just x) -> x
          _ ->
            error $
-            "Data.Acid: Invalid subtype cast: " ++ show (typeOf1 sub) ++ " -> " ++ show (typeOf1 r)
+            "Data.Acid.Abstract: Invalid subtype cast: " ++ show (typeOf1 sub) ++ " -> " ++ show (typeOf1 r)
 #endif
