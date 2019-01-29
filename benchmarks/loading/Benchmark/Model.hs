@@ -10,4 +10,7 @@ type Model = [[[Int]]]
 insert :: [[Int]] -> Acid.Update Model ()
 insert = modify . (:)
 
-Acid.makeAcidic ''Model ['insert]
+sumUp :: Acid.Query Model Int
+sumUp = sum . map (sum . map sum) <$> ask
+
+Acid.makeAcidic ''Model ['insert, 'sumUp]
