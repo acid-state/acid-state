@@ -35,6 +35,7 @@ import qualified Data.ByteString as Strict
 import qualified Data.ByteString.Unsafe as Strict
 import Data.List
 import Data.Maybe
+import Data.Monoid                               ((<>))
 import qualified Data.Serialize.Get as Get
 import qualified Data.Serialize.Put as Put
 import Data.SafeCopy                             ( safePut, safeGet, SafeCopy )
@@ -148,7 +149,7 @@ closeFileLog fLog =
   modifyMVar_ (logCurrent fLog) $ \handle -> do
     close handle
     _ <- forkIO $ forM_ (logThreads fLog) killThread
-    return $ error "FileLog has been closed"
+    return $ error "Data.Acid.Log: FileLog has been closed"
 
 readEntities :: FilePath -> IO [Lazy.ByteString]
 readEntities path = do
@@ -157,7 +158,7 @@ readEntities path = do
  where
   worker Done              = []
   worker (Next entry next) = entry : worker next
-  worker (Fail msg)        = error msg
+  worker (Fail msg)        = error $ "Data.Acid.Log: " <> msg
 
 ensureLeastEntryId :: FileLog object -> EntryId -> IO ()
 ensureLeastEntryId fLog youngestEntry = do
@@ -310,9 +311,9 @@ newestEntry identifier = do
     case Archive.readEntries archive of
       Done            -> worker logFiles
       Next entry next -> return $ Just (decode' (lastEntry entry next))
-      Fail msg        -> error msg
+      Fail msg        -> error $ "Data.Acid.Log: " <> msg
   lastEntry entry Done          = entry
-  lastEntry entry (Fail msg)    = error msg
+  lastEntry entry (Fail msg)    = error $ "Data.Acid.Log: " <> msg
   lastEntry _ (Next entry next) = lastEntry entry next
 
 -- Schedule a new log entry. This call does not block
@@ -342,5 +343,5 @@ askCurrentEntryId fLog = atomically $
 decode' :: SafeCopy object => Lazy.ByteString -> object
 decode' inp =
   case Get.runGetLazy safeGet inp of
-    Left msg  -> error msg
+    Left msg  -> error $ "Data.Acid.Log: " <> msg
     Right val -> val

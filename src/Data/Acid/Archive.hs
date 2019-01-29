@@ -30,7 +30,7 @@ data Entries = Done | Next Entry Entries | Fail String
 entriesToList :: Entries -> [Entry]
 entriesToList Done              = []
 entriesToList (Next entry next) = entry : entriesToList next
-entriesToList (Fail msg)        = error msg
+entriesToList (Fail msg)        = error $ "Data.Acid.Archive: " <> msg
 
 entriesToListNoFail :: Entries -> [Entry]
 entriesToListNoFail Done              = []
