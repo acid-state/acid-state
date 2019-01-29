@@ -48,7 +48,6 @@ Library
                        bytestring >= 0.10.2,
                        cereal >= 0.4.1.0,
                        containers,
-                       extensible-exceptions,
                        safecopy >= 0.6,
                        stm >= 2.4,
                        directory,
@@ -138,7 +137,6 @@ test-suite examples
                        KeyValueNoTH
                        MonadStateConstraint
                        ParameterisedState
-                       Proxy
                        RemoteClient
                        RemoteCommon
                        RemoteServer
@@ -146,6 +144,8 @@ test-suite examples
                        SlowCheckpoint
                        StressTest
                        StressTestNoTH
+  if !os(windows)
+     other-modules:    Proxy
   default-language:    Haskell2010
 
 benchmark loading-benchmark
