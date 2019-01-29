@@ -16,22 +16,22 @@ environment:
       CHOCOPTS:
       TEST: --enable-tests
       BENCH: --enable-benchmarks
-    - GHCVER: "8.0.2.2"
-      CHOCOPTS:
-      TEST: --disable-tests
-      BENCH: --disable-benchmarks
-    - GHCVER: "7.10.3.2"
-      CHOCOPTS:
-      TEST: --disable-tests
-      BENCH: --disable-benchmarks
-    - GHCVER: "7.8.4.1"
-      CHOCOPTS:
-      TEST: --disable-tests
-      BENCH: --disable-benchmarks
-    - GHCVER: "7.6.3.1"
-      CHOCOPTS:
-      TEST: --disable-tests
-      BENCH: --disable-benchmarks
+    # - GHCVER: "8.0.2.2"
+    #   CHOCOPTS:
+    #   TEST: --disable-tests
+    #   BENCH: --disable-benchmarks
+    # - GHCVER: "7.10.3.2"
+    #   CHOCOPTS:
+    #   TEST: --disable-tests
+    #   BENCH: --disable-benchmarks
+    # - GHCVER: "7.8.4.1"
+    #   CHOCOPTS:
+    #   TEST: --disable-tests
+    #   BENCH: --disable-benchmarks
+    # - GHCVER: "7.6.3.1"
+    #   CHOCOPTS:
+    #   TEST: --disable-tests
+    #   BENCH: --disable-benchmarks
 
 cache:
 - "C:\\SR"
