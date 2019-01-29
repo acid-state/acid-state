@@ -10,6 +10,7 @@ import           Control.Monad.State
 import           Data.SafeCopy
 import           System.Directory
 import           System.Environment
+import           Data.List (isSuffixOf)
 
 import qualified Data.Text           as Text
 
@@ -55,7 +56,7 @@ test = do
     putStrLn "ChangeState done"
   where
     hdl (ErrorCall msg)
-      | msg == "Could not parse saved checkpoint due to the following error: too few bytes\nFrom:\tChangeState.SecondState:\n\tdemandInput\n\n"
+      | "Could not parse saved checkpoint due to the following error: too few bytes\nFrom:\tChangeState.SecondState:\n\tdemandInput\n\n" `isSuffixOf` msg 
       = putStrLn $ "Caught error: " ++ msg
     hdl e = throwIO e
 

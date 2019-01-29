@@ -54,7 +54,7 @@ Library
                        filelock,
                        filepath,
                        mtl,
-                       network,
+                       network < 2.9,
                        template-haskell,
                        th-expand-syns
 
@@ -164,7 +164,7 @@ benchmark loading-benchmark
     directory,
     system-fileio == 0.3.*,
     system-filepath,
-    criterion >= 0.8 && < 1.5,
+    criterion >= 1.0.0.0 && < 1.6,
     mtl,
     base,
     acid-state

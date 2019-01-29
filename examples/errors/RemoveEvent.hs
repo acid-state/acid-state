@@ -10,6 +10,7 @@ import           Control.Monad.State
 import           Data.SafeCopy
 import           System.Directory
 import           System.Environment
+import           Data.List (isSuffixOf)
 
 import           Data.Typeable
 
@@ -62,7 +63,7 @@ test = do
     putStrLn "RemoveEvent done"
   where
     hdl (ErrorCall msg)
-      | msg == "This method is required but not available: \"RemoveEvent.FirstEvent\". Did you perhaps remove it before creating a checkpoint?"
+      | "This method is required but not available: \"RemoveEvent.FirstEvent\". Did you perhaps remove it before creating a checkpoint?" `isSuffixOf` msg
       = putStrLn $ "Caught error: " ++ msg
     hdl e = throwIO e
 
