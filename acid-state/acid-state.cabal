@@ -1,5 +1,5 @@
 Name:                acid-state
-Version:             0.15.0
+Version:             0.16.0
 Synopsis:            Add ACID guarantees to any serializable Haskell data structure.
 Description:         Use regular Haskell data structures as your database and get stronger ACID guarantees than most RDBMS offer.
 Homepage:            https://github.com/acid-state/acid-state
@@ -10,7 +10,7 @@ Maintainer:          Lemmih <lemmih@gmail.com>
 Category:            Database
 Build-type:          Simple
 Cabal-version:       1.22
-tested-with:         GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3, GHC == 8.0.2, GHC == 8.2.2, GHC == 8.4.3, GHC == 8.6.3
+tested-with:         GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3, GHC == 8.0.2, GHC == 8.2.2, GHC == 8.4.4, GHC == 8.6.3
 Extra-source-files:
         CHANGELOG.md
         test-state/OldStateTest1/*.log
@@ -23,6 +23,7 @@ Extra-source-files:
 Source-repository head
   type:          git
   location:      https://github.com/acid-state/acid-state
+  subdir:        acid-state
 
 flag skip-state-machine-test
   description: If enabled, do not build/run the state-machine test
@@ -45,7 +46,7 @@ Library
                        Data.Acid.Memory,
                        Data.Acid.Memory.Pure
 
-  Build-depends:       acid-state-internal == 0.15.0,
+  Build-depends:       acid-state-internal == 0.16.0,
                        array,
                        base >= 4.5.1.0 && < 5,
                        bytestring >= 0.10.2,
@@ -87,7 +88,7 @@ test-suite state-machine
   main-is:             StateMachine.hs
   build-depends:       base
                      , acid-state
-                     , acid-state-tests == 0.15.0
+                     , acid-state-tests == 0.16.0
                      , containers
                      , deepseq >= 1.4.0.0
                      , directory

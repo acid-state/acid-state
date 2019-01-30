@@ -1,7 +1,7 @@
 Name:                acid-state-internal
-Version:             0.15.0
-Synopsis:            Add ACID guarantees to any serializable Haskell data structure.
-Description:         Use regular Haskell data structures as your database and get stronger ACID guarantees than most RDBMS offer.
+Version:             0.16.0
+Synopsis:            Internal utilities for the acid-state package
+Description:         Use regular Haskell data structures as your database and get stronger ACID guarantees than most RDBMS offer. This package provides internal utilities for the acid-state package and related packages. You are unlikely to need to depend on it directly.
 Homepage:            https://github.com/acid-state/acid-state
 License:             PublicDomain
 Author:              David Himmelstrup
@@ -10,11 +10,12 @@ Maintainer:          Lemmih <lemmih@gmail.com>
 Category:            Database
 Build-type:          Simple
 Cabal-version:       >=1.10
-tested-with:         GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3, GHC == 8.0.2, GHC == 8.2.2, GHC == 8.4.3
+tested-with:         GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3, GHC == 8.0.2, GHC == 8.2.2, GHC == 8.4.4, GHC == 8.6.3
 
 Source-repository head
   type:          git
   location:      https://github.com/acid-state/acid-state
+  subdir:        acid-state-internal
 
 Library
   Exposed-Modules:     Data.Acid.Internal.Archive
