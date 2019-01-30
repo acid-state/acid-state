@@ -36,6 +36,7 @@ import qualified Data.ByteString as Strict
 import qualified Data.ByteString.Unsafe as Strict
 import Data.List
 import Data.Maybe
+import Data.Monoid                               ((<>))
 import Text.Printf                               ( printf )
 
 import Paths_acid_state                          ( version )
@@ -147,7 +148,7 @@ closeFileLog fLog =
   modifyMVar_ (logCurrent fLog) $ \handle -> do
     close handle
     _ <- forkIO $ forM_ (logThreads fLog) killThread
-    return $ error "FileLog has been closed"
+    return $ error "Data.Acid.Log: FileLog has been closed"
 
 readEntities :: Archiver -> FilePath -> IO [Lazy.ByteString]
 readEntities archiver path = do
@@ -306,9 +307,9 @@ newestEntry identifier = do
     case archiveRead (logArchiver identifier) archive of
       Done            -> worker logFiles
       Next entry next -> return $ Just (decode' identifier (lastEntry entry next))
-      Fail msg        -> error msg
+      Fail msg        -> error $ "Data.Acid.Log: " <> msg
   lastEntry entry Done          = entry
-  lastEntry entry (Fail msg)    = error msg
+  lastEntry entry (Fail msg)    = error $ "Data.Acid.Log: " <> msg
   lastEntry _ (Next entry next) = lastEntry entry next
 
 -- Schedule a new log entry. This call does not block
@@ -339,5 +340,5 @@ askCurrentEntryId fLog = atomically $
 decode' :: LogKey object -> Lazy.ByteString -> object
 decode' s inp =
   case serialiserDecode (logSerialiser s) inp of
-    Left msg  -> error msg
+    Left msg  -> error $ "Data.Acid.Log: " <> msg
     Right val -> val

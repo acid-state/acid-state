@@ -39,7 +39,7 @@ data Entries = Done | Next Entry Entries | Fail String
 entriesToList :: Entries -> [Entry]
 entriesToList Done              = []
 entriesToList (Next entry next) = entry : entriesToList next
-entriesToList (Fail msg)        = error msg
+entriesToList (Fail msg)        = error $ "Data.Acid.Archive: " <> msg
 
 -- | Convert 'Entries' to a normal list, silently ignoring a failure
 -- to unpack the archive and instead returning a truncated list.

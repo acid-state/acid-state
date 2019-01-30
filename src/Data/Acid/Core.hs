@@ -51,6 +51,7 @@ import Control.Concurrent                 ( MVar, newMVar, withMVar
 import Control.Monad                      ( liftM )
 import Control.Monad.State                ( State, runState )
 import qualified Data.Map as Map
+import Data.Monoid                        ((<>))
 import Data.ByteString.Lazy as Lazy       ( ByteString )
 import Data.ByteString.Lazy.Char8 as Lazy ( pack, unpack )
 
@@ -178,7 +179,7 @@ closeCore' core action
     = modifyMVar_ (coreState core) $ \st ->
       do action st
          return errorMsg
-    where errorMsg = error "Access failure: Core closed."
+    where errorMsg = error "Data.Acid.Core: Access failure: Core closed."
 
 -- | Modify the state component. The resulting state is ensured to be in
 --   WHNF.
@@ -221,12 +222,12 @@ lookupColdMethod core (storedMethodTag, methodContent)
 lazyDecode :: MethodSerialiser method -> Lazy.ByteString -> method
 lazyDecode ms inp
     = case decodeMethod ms inp of
-        Left msg  -> error msg
+        Left msg  -> error $ "Data.Acid.Core: " <> msg
         Right val -> val
 
 missingMethod :: Tag -> a
 missingMethod tag
-    = error msg
+    = error $ "Data.Acid.Core: " <> msg
     where msg = "This method is required but not available: " ++ show (Lazy.unpack tag) ++
                 ". Did you perhaps remove it before creating a checkpoint?"
 

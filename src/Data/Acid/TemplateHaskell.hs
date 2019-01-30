@@ -14,6 +14,7 @@ import Data.List ((\\), nub, delete)
 import Data.SafeCopy
 import Data.Typeable
 import Data.Char
+import Data.Monoid ((<>))
 import Control.Applicative
 import Control.Monad
 import Control.Monad.State (MonadState)
@@ -93,8 +94,8 @@ makeAcidicWithSerialiser ss stateName eventNames
                    -> makeAcidic' ss eventNames stateName tyvars [constructor]
                  TySynD _name tyvars _ty
                    -> makeAcidic' ss eventNames stateName tyvars []
-                 _ -> error "Unsupported state type. Only 'data', 'newtype' and 'type' are supported."
-           _ -> error "Given state is not a type."
+                 _ -> error "Data.Acid.TemplateHaskell: Unsupported state type. Only 'data', 'newtype' and 'type' are supported."
+           _ -> error "Data.Acid.TemplateHaskell: Given state is not a type."
 
 makeAcidic' :: SerialiserSpec -> [Name] -> Name -> [TyVarBndr] -> [Con] -> Q [Dec]
 makeAcidic' ss eventNames stateName tyvars constructors
@@ -137,7 +138,7 @@ getEventType eventName
            VarI _name eventType _decl _fixity
 #endif
              -> expandSyns eventType
-           _ -> error $ "Events must be functions: " ++ show eventName
+           _ -> error $ "Data.Acid.TemplateHaskell: Events must be functions: " ++ show eventName
 
 --instance (SafeCopy key, Typeable key, SafeCopy val, Typeable val) => IsAcidic State where
 --  acidEvents = [ UpdateEvent (\(MyUpdateEvent arg1 arg2 -> myUpdateEvent arg1 arg2) ]
@@ -237,7 +238,9 @@ eventCxts targetStateType targetTyVars eventName eventType =
       renameName :: Pred -> [(Name, Name)] -> Name -> Name
       renameName pred table n =
           case lookup n table of
-            Nothing -> error $ unlines [ show $ ppr_sig eventName eventType
+            Nothing -> error $ unlines [ "Data.Acid.TemplateHaskell: "
+                                       , ""
+                                       , show $ ppr_sig eventName eventType
                                        , ""
                                        , "can not be used as an UpdateEvent because the class context: "
                                        , ""
@@ -282,7 +285,7 @@ makeEventHandler ss eventName eventType
           assertTyVarsOk =
               case tyVarNames \\ stateTypeTyVars of
                 [] -> return ()
-                ns -> error $ unlines
+                ns -> error $ "Data.Acid.TemplateHaskell: " <> unlines
                       [show $ ppr_sig eventName eventType
                       , ""
                       , "can not be used as an UpdateEvent because it contains the type variables: "
@@ -470,7 +473,7 @@ analyseType eventName t = go [] [] [] t
         updates = getMonadState cxt m
         tyvars = filter ((/= m) . tyVarBndrName) tyvars'
     -- otherwise, fail
-    go _ _ _ _ = error $ "Event has an invalid type signature: Not an Update, Query, MonadState, or MonadReader: " ++ show eventName
+    go _ _ _ _ = error $ "Data.Acid.TemplateHaskell: Event has an invalid type signature: Not an Update, Query, MonadState, or MonadReader: " ++ show eventName
 
 -- | find the type variables
 -- | e.g. State a b  ==> [a,b]

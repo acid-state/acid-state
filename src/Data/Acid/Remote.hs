@@ -108,6 +108,7 @@ import Control.Concurrent.Chan                       ( newChan, readChan, writeC
 import Data.Acid.Abstract
 import Data.Acid.Core
 import Data.Acid.Common
+import Data.Monoid                                   ((<>))
 import qualified Data.ByteString                     as Strict
 import Data.ByteString.Char8                         ( pack )
 import qualified Data.ByteString.Lazy                as Lazy
@@ -288,7 +289,7 @@ instance Serialize Command where
              1 -> liftM RunUpdate get
              2 -> return CreateCheckpoint
              3 -> return CreateArchive
-             _ -> error $ "Serialize.get for Command, invalid tag: " ++ show tag
+             _ -> error $ "Data.Acid.Remote: Serialize.get for Command, invalid tag: " ++ show tag
 
 data Response = Result Lazy.ByteString | Acknowledgement | ConnectionError
 
@@ -302,7 +303,7 @@ instance Serialize Response where
              0 -> liftM Result get
              1 -> return Acknowledgement
              2 -> return ConnectionError
-             _ -> error $ "Serialize.get for Response, invalid tag: " ++ show tag
+             _ -> error $ "Data.Acid.Remote: Serialize.get for Response, invalid tag: " ++ show tag
 
 {- | Server inner-loop
 
@@ -425,7 +426,7 @@ processRemoteState reconnect
                  getResponse leftover =
                      do debugStrLn $ "listener: listening for Response."
                         let go inp = case inp of
-                                   Fail msg _     -> error msg
+                                   Fail msg _     -> error $ "Data.Acid.Remote: " <> msg
                                    Partial cont   -> do debugStrLn $ "listener: ccGetSome"
                                                         bs <- ccGetSome cc 1024
                                                         go (cont bs)
@@ -483,7 +484,7 @@ remoteQuery acidState mmap event
   = do let encoded = encodeMethod ms event
        resp <- remoteQueryCold acidState (methodTag event, encoded)
        return (case decodeResult ms resp of
-                 Left msg -> error msg
+                 Left msg -> error $ "Data.Acid.Remote: " <> msg
                  Right result -> result)
   where
     (_, ms) = lookupHotMethodAndSerialiser mmap event
@@ -495,7 +496,7 @@ remoteQueryCold rs@(RemoteState fn _shutdown) event
          (Result result) -> return result
          ConnectionError -> do debugStrLn "retrying query event."
                                remoteQueryCold rs event
-         Acknowledgement    -> error "remoteQueryCold got Acknowledgement. That should never happen."
+         Acknowledgement    -> error "Data.Acid.Remote: remoteQueryCold got Acknowledgement. That should never happen."
 
 scheduleRemoteUpdate :: UpdateEvent event => RemoteState (EventState event) -> MethodMap (EventState event) -> event -> IO (MVar (EventResult event))
 scheduleRemoteUpdate (RemoteState fn _shutdown) mmap event
@@ -504,7 +505,7 @@ scheduleRemoteUpdate (RemoteState fn _shutdown) mmap event
        respRef <- fn (RunUpdate (methodTag event, encoded))
        forkIO $ do Result resp <- takeMVar respRef
                    putMVar parsed (case decodeResult ms resp of
-                                      Left msg -> error msg
+                                      Left msg -> error $ "Data.Acid.Remote: " <> msg
                                       Right result -> result)
        return parsed
   where
