@@ -4,6 +4,10 @@ environment:
   global:
     CABOPTS:  "--store-dir=C:\\SR --http-transport=plain-http"
   matrix:
+    # - GHCVER: "8.6.3"
+    #   CHOCOPTS:
+    #   TEST: --enable-tests
+    #   BENCH: --enable-benchmarks
     - GHCVER: "8.4.4"
       CHOCOPTS:
       TEST: --enable-tests
@@ -12,22 +16,22 @@ environment:
       CHOCOPTS:
       TEST: --enable-tests
       BENCH: --enable-benchmarks
-    - GHCVER: "8.0.2.2"
-      CHOCOPTS:
-      TEST: --disable-tests
-      BENCH: --disable-benchmarks
-    - GHCVER: "7.10.3.2"
-      CHOCOPTS:
-      TEST: --disable-tests
-      BENCH: --disable-benchmarks
-    - GHCVER: "7.8.4.1"
-      CHOCOPTS:
-      TEST: --disable-tests
-      BENCH: --disable-benchmarks
-    - GHCVER: "7.6.3.1"
-      CHOCOPTS:
-      TEST: --disable-tests
-      BENCH: --disable-benchmarks
+    # - GHCVER: "8.0.2.2"
+    #   CHOCOPTS:
+    #   TEST: --disable-tests
+    #   BENCH: --disable-benchmarks
+    # - GHCVER: "7.10.3.2"
+    #   CHOCOPTS:
+    #   TEST: --disable-tests
+    #   BENCH: --disable-benchmarks
+    # - GHCVER: "7.8.4.1"
+    #   CHOCOPTS:
+    #   TEST: --disable-tests
+    #   BENCH: --disable-benchmarks
+    # - GHCVER: "7.6.3.1"
+    #   CHOCOPTS:
+    #   TEST: --disable-tests
+    #   BENCH: --disable-benchmarks
 
 cache:
 - "C:\\SR"
