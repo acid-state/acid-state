@@ -4,10 +4,10 @@ environment:
   global:
     CABOPTS:  "--store-dir=C:\\SR --http-transport=plain-http"
   matrix:
-    - GHCVER: "8.6.3"
-      CHOCOPTS:
-      TEST: --enable-tests
-      BENCH: --enable-benchmarks
+    # - GHCVER: "8.6.3"
+    #   CHOCOPTS:
+    #   TEST: --enable-tests
+    #   BENCH: --enable-benchmarks
     - GHCVER: "8.4.4"
       CHOCOPTS:
       TEST: --enable-tests
