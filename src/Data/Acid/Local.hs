@@ -15,15 +15,21 @@
 module Data.Acid.Local
     ( openLocalState
     , openLocalStateFrom
+    , openLocalStateWithSerialiser
     , prepareLocalState
     , prepareLocalStateFrom
+    , prepareLocalStateWithSerialiser
+    , defaultStateDirectory
     , scheduleLocalUpdate'
     , scheduleLocalColdUpdate'
     , createCheckpointAndClose
     , LocalState(..)
     , Checkpoint(..)
+    , SerialisationLayer(..)
+    , defaultSerialisationLayer
     ) where
 
+import Data.Acid.Archive
 import Data.Acid.Log as Log
 import Data.Acid.Core
 import Data.Acid.Common
@@ -64,7 +70,7 @@ data LocalState st
     = LocalState { localCore        :: Core st
                  , localCopy        :: IORef st
                  , localEvents      :: FileLog (Tagged ByteString)
-                 , localCheckpoints :: FileLog Checkpoint
+                 , localCheckpoints :: FileLog (Checkpoint st)
                  , localLock        :: FileLock
                  } deriving (Typeable)
 
@@ -85,7 +91,7 @@ instance Exception StateIsLocked
 scheduleLocalUpdate :: UpdateEvent event => LocalState (EventState event) -> event -> IO (MVar (EventResult event))
 scheduleLocalUpdate acidState event
     = do mvar <- newEmptyMVar
-         let encoded = runPutLazy (safePut event)
+         let encoded = encodeMethod ms event
 
          -- It is important that we encode the event now so that we can catch
          -- any exceptions (see nestedStateError in examples/errors/Exceptions.hs)
@@ -99,7 +105,7 @@ scheduleLocalUpdate acidState event
                                                                                 putMVar mvar result
               return st'
          return mvar
-    where hotMethod = lookupHotMethod (coreMethods (localCore acidState)) event
+    where (hotMethod, ms) = lookupHotMethodAndSerialiser (coreMethods (localCore acidState)) event
 
 -- | Same as scheduleLocalUpdate but does not immediately change the localCopy
 -- and return the result mvar - returns an IO action to do this instead. Take
@@ -108,7 +114,7 @@ scheduleLocalUpdate acidState event
 scheduleLocalUpdate' :: UpdateEvent event => LocalState (EventState event) -> event -> MVar (EventResult event) -> IO (IO ())
 scheduleLocalUpdate' acidState event mvar
     = do
-         let encoded = runPutLazy (safePut event)
+         let encoded = encodeMethod ms event
 
          -- It is important that we encode the event now so that we can catch
          -- any exceptions (see nestedStateError in examples/errors/Exceptions.hs)
@@ -125,7 +131,7 @@ scheduleLocalUpdate' acidState event mvar
          -- this is the action to update state for queries and release the
          -- result into the supplied mvar
          return act
-    where hotMethod = lookupHotMethod (coreMethods (localCore acidState)) event
+    where (hotMethod, ms) = lookupHotMethodAndSerialiser (coreMethods (localCore acidState)) event
 
 scheduleLocalColdUpdate :: LocalState st -> Tagged ByteString -> IO (MVar ByteString)
 scheduleLocalColdUpdate acidState event
@@ -179,27 +185,26 @@ localQueryCold acidState event
 --   with this call.
 --
 --   This call will not return until the operation has succeeded.
-createLocalCheckpoint :: SafeCopy st => LocalState st -> IO ()
+createLocalCheckpoint :: IsAcidic st => LocalState st -> IO ()
 createLocalCheckpoint acidState
     = do cutFileLog (localEvents acidState)
          mvar <- newEmptyMVar
          withCoreState (localCore acidState) $ \st ->
            do eventId <- askCurrentEntryId (localEvents acidState)
               pushAction (localEvents acidState) $
-                do let encoded = runPutLazy (safePut st)
-                   pushEntry (localCheckpoints acidState) (Checkpoint eventId encoded) (putMVar mvar ())
+                pushEntry (localCheckpoints acidState) (Checkpoint eventId st) (putMVar mvar ())
          takeMVar mvar
 
 -- | Save a snapshot to disk and close the AcidState as a single atomic
 --   action. This is useful when you want to make sure that no events
 --   are saved to disk after a checkpoint.
-createCheckpointAndClose :: (SafeCopy st, Typeable st) => AcidState st -> IO ()
+createCheckpointAndClose :: (IsAcidic st, Typeable st) => AcidState st -> IO ()
 createCheckpointAndClose abstract_state
     = do mvar <- newEmptyMVar
          closeCore' (localCore acidState) $ \st ->
            do eventId <- askCurrentEntryId (localEvents acidState)
               pushAction (localEvents acidState) $
-                pushEntry (localCheckpoints acidState) (Checkpoint eventId (runPutLazy (safePut st))) (putMVar mvar ())
+                pushEntry (localCheckpoints acidState) (Checkpoint eventId st) (putMVar mvar ())
          takeMVar mvar
          closeFileLog (localEvents acidState)
          closeFileLog (localCheckpoints acidState)
@@ -207,75 +212,152 @@ createCheckpointAndClose abstract_state
   where acidState = downcast abstract_state
 
 
-data Checkpoint = Checkpoint EntryId ByteString
+data Checkpoint s = Checkpoint EntryId s
 
-instance SafeCopy Checkpoint where
+-- | Previous versions of @acid-state@ had
+--
+-- > data Checkpoint = Checkpoint EntryId ByteString
+--
+-- where the 'ByteString' is the @safecopy@-serialization of the
+-- original checkpoint data.  Thus we give a 'SafeCopy' instance that
+-- is backwards-compatible with this by making nested calls to
+-- 'safePut' and 'safeGet'.
+--
+-- Note that if the inner data cannot be deserialised, 'getCopy' will
+-- not report an error immediately but will return a 'Checkpoint'
+-- whose payload is an error thunk.  This means consumers can skip
+-- deserialising intermediate checkpoint data when they care only
+-- about the last checkpoint in a file.  However, they must be sure to
+-- force the returned data promptly.
+instance SafeCopy s => SafeCopy (Checkpoint s) where
     kind = primitive
     putCopy (Checkpoint eventEntryId content)
         = contain $
           do safePut eventEntryId
-             safePut content
-    getCopy = contain $ Checkpoint <$> safeGet <*> safeGet
+             safePut (runPutLazy (safePut content))
+    getCopy = contain $ Checkpoint <$> safeGet <*> (fromNested <$> safeGet)
+      where
+        fromNested b = case runGetLazy safeGet b of
+                         Left msg -> checkpointRestoreError msg
+                         Right v  -> v
 
 
 -- | Create an AcidState given an initial value.
 --
 --   This will create or resume a log found in the \"state\/[typeOf state]\/\" directory.
-openLocalState :: (Typeable st, IsAcidic st)
+openLocalState :: (Typeable st, IsAcidic st, SafeCopy st)
               => st                          -- ^ Initial state value. This value is only used if no checkpoint is
                                              --   found.
               -> IO (AcidState st)
 openLocalState initialState =
-  openLocalStateFrom ("state" </> show (typeOf initialState)) initialState
+  openLocalStateFrom (defaultStateDirectory initialState) initialState
 
 -- | Create an AcidState given an initial value.
 --
 --   This will create or resume a log found in the \"state\/[typeOf state]\/\" directory.
 --   The most recent checkpoint will be loaded immediately but the AcidState will not be opened
 --   until the returned function is executed.
-prepareLocalState :: (Typeable st, IsAcidic st)
+prepareLocalState :: (Typeable st, IsAcidic st, SafeCopy st)
                   => st                          -- ^ Initial state value. This value is only used if no checkpoint is
                                                  --   found.
                   -> IO (IO (AcidState st))
 prepareLocalState initialState =
-  prepareLocalStateFrom ("state" </> show (typeOf initialState)) initialState
+  prepareLocalStateFrom (defaultStateDirectory initialState) initialState
 
+-- | Directory to load the state from unless otherwise specified,
+-- namely \"state\/[typeOf state]\/\".
+defaultStateDirectory :: Typeable st => st -> FilePath
+defaultStateDirectory initialState = "state" </> show (typeOf initialState)
 
 -- | Create an AcidState given a log directory and an initial value.
 --
 --   This will create or resume a log found in @directory@.
 --   Running two AcidState's from the same directory is an error
 --   but will not result in dataloss.
-openLocalStateFrom :: (IsAcidic st)
+openLocalStateFrom :: (IsAcidic st, SafeCopy st)
                   => FilePath            -- ^ Location of the checkpoint and transaction files.
                   -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
                                          --   found.
                   -> IO (AcidState st)
 openLocalStateFrom directory initialState =
-  join $ resumeLocalStateFrom directory initialState False
+  openLocalStateWithSerialiser directory initialState defaultSerialisationLayer
 
--- | Create an AcidState given an initial value.
+-- | Create an AcidState given a log directory, an initial value and a serialisation layer.
+--
+--   This will create or resume a log found in @directory@.
+--   Running two AcidState's from the same directory is an error
+--   but will not result in dataloss.
+openLocalStateWithSerialiser :: (IsAcidic st)
+                  => FilePath            -- ^ Location of the checkpoint and transaction files.
+                  -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
+                                         --   found.
+                  -> SerialisationLayer st -- ^ Serialisation layer to use for checkpoints, events and archives.
+                  -> IO (AcidState st)
+openLocalStateWithSerialiser directory initialState serialisationLayer =
+  join $ resumeLocalStateFrom directory initialState False serialisationLayer
+
+-- | Create an AcidState given a log directory and an initial value.
 --
 --   This will create or resume a log found in @directory@.
 --   The most recent checkpoint will be loaded immediately but the AcidState will not be opened
 --   until the returned function is executed.
-prepareLocalStateFrom :: (IsAcidic st)
+prepareLocalStateFrom :: (IsAcidic st, SafeCopy st)
                   => FilePath            -- ^ Location of the checkpoint and transaction files.
                   -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
                                          --   found.
                   -> IO (IO (AcidState st))
 prepareLocalStateFrom directory initialState =
-  resumeLocalStateFrom directory initialState True
+  prepareLocalStateWithSerialiser directory initialState defaultSerialisationLayer
+
+-- | Create an AcidState given a log directory, an initial value and a serialisation layer.
+--
+--   This will create or resume a log found in @directory@.
+--   The most recent checkpoint will be loaded immediately but the AcidState will not be opened
+--   until the returned function is executed.
+prepareLocalStateWithSerialiser :: (IsAcidic st)
+                  => FilePath            -- ^ Location of the checkpoint and transaction files.
+                  -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
+                                         --   found.
+                  -> SerialisationLayer st -- ^ Serialisation layer to use for checkpoints, events and archives.
+                  -> IO (IO (AcidState st))
+prepareLocalStateWithSerialiser directory initialState serialisationLayer =
+  resumeLocalStateFrom directory initialState True serialisationLayer
 
 
+data SerialisationLayer st =
+    SerialisationLayer
+        {  checkpointSerialiser :: Serialiser (Checkpoint st)
+            -- ^ Serialisation strategy for checkpoints.
+            --
+            -- Use 'safeCopySerialiser' for the backwards-compatible
+            -- implementation using "Data.SafeCopy".
+
+        , eventSerialiser :: Serialiser (Tagged ByteString)
+            -- ^ Serialisation strategy for events.
+            --
+            -- Use 'safeCopySerialiser' for the backwards-compatible
+            -- implementation using "Data.SafeCopy".
+
+        , archiver :: Archiver
+            -- ^ Serialisation strategy for archive log files.
+            --
+            -- Use 'defaultArchiver' for the backwards-compatible
+            -- implementation using "Data.Serialize".
+        }
+
+-- | Standard (and historically the only) serialisation layer, using
+-- 'safeCopySerialiser' and 'defaultArchiver'.
+defaultSerialisationLayer :: SafeCopy st => SerialisationLayer st
+defaultSerialisationLayer = SerialisationLayer safeCopySerialiser safeCopySerialiser defaultArchiver
 
 resumeLocalStateFrom :: (IsAcidic st)
                   => FilePath            -- ^ Location of the checkpoint and transaction files.
                   -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
                                          --   found.
                   -> Bool                -- ^ True => load checkpoint before acquiring the lock.
+                  -> SerialisationLayer st -- ^ Serialisation layer to use for checkpoints, events and archives.
                   -> IO (IO (AcidState st))
-resumeLocalStateFrom directory initialState delayLocking =
+resumeLocalStateFrom directory initialState delayLocking serialisationLayer =
   case delayLocking of
     True -> do
       (n, st) <- loadCheckpoint
@@ -290,18 +372,22 @@ resumeLocalStateFrom directory initialState delayLocking =
   where
     lockFile = directory </> "open.lock"
     eventsLogKey = LogKey { logDirectory = directory
-                          , logPrefix = "events" }
+                          , logPrefix = "events"
+                          , logSerialiser = eventSerialiser serialisationLayer
+                          , logArchiver   = archiver serialisationLayer }
     checkpointsLogKey = LogKey { logDirectory = directory
-                               , logPrefix = "checkpoints" }
+                               , logPrefix = "checkpoints"
+                               , logSerialiser = checkpointSerialiser serialisationLayer
+                               , logArchiver = archiver serialisationLayer }
     loadCheckpoint = do
       mbLastCheckpoint <- Log.newestEntry checkpointsLogKey
       case mbLastCheckpoint of
         Nothing ->
           return (0, initialState)
-        Just (Checkpoint eventCutOff content) -> do
-          case runGetLazy safeGet content of
-            Left msg  -> checkpointRestoreError msg
-            Right val -> return (eventCutOff, val)
+        Just (Checkpoint eventCutOff !val) ->
+          -- N.B. We must be strict in val so that we force any
+          -- lurking deserialisation error immediately.
+          return (eventCutOff, val)
     replayEvents lock n st = do
       core <- mkCore (eventsToMethods acidEvents) st
 

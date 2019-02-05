@@ -77,6 +77,6 @@ instance QueryEvent QueryState
 
 
 instance IsAcidic HelloWorldState where
-    acidEvents = [ UpdateEvent (\(WriteState newState) -> writeState newState)
-                 , QueryEvent (\QueryState             -> queryState)
+    acidEvents = [ UpdateEvent (\(WriteState newState) -> writeState newState) safeCopyMethodSerialiser
+                 , QueryEvent (\QueryState             -> queryState)          safeCopyMethodSerialiser
                  ]

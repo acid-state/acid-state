@@ -20,7 +20,8 @@ module Data.Acid.Log
     , archiveFileLog
     ) where
 
-import Data.Acid.Archive as Archive
+import Data.Acid.Archive (Archiver(..), Entries(..), entriesToList)
+import Data.Acid.Core
 import System.Directory
 import System.FilePath
 import System.IO
@@ -36,10 +37,6 @@ import qualified Data.ByteString.Unsafe as Strict
 import Data.List
 import Data.Maybe
 import Data.Monoid                               ((<>))
-import qualified Data.Serialize.Get as Get
-import qualified Data.Serialize.Put as Put
-import Data.SafeCopy                             ( safePut, safeGet, SafeCopy )
-
 import Text.Printf                               ( printf )
 
 import Paths_acid_state                          ( version )
@@ -60,6 +57,8 @@ data LogKey object
     = LogKey
       { logDirectory :: FilePath
       , logPrefix    :: String
+      , logSerialiser :: Serialiser object
+      , logArchiver   :: Archiver
       }
 
 formatLogFile :: String -> EntryId -> String
@@ -90,7 +89,7 @@ openFileLog identifier = do
   queue <- newTVarIO ([], [])
   nextEntryRef <- newTVarIO 0
   tid1 <- myThreadId
-  tid2 <- forkIO $ fileWriter currentState queue tid1
+  tid2 <- forkIO $ fileWriter (logArchiver identifier) currentState queue tid1
   let fLog = FileLog { logIdentifier  = identifier
                      , logCurrent     = currentState
                      , logNextEntryId = nextEntryRef
@@ -101,15 +100,15 @@ openFileLog identifier = do
              handle <- open (logDirectory identifier </> formatLogFile (logPrefix identifier) currentEntryId)
              putMVar currentState handle
      else do let (lastFileEntryId, lastFilePath) = maximum logFiles
-             entries <- readEntities lastFilePath
+             entries <- readEntities (logArchiver identifier) lastFilePath
              let currentEntryId = lastFileEntryId + length entries
              atomically $ writeTVar nextEntryRef currentEntryId
              handle <- open (logDirectory identifier </> formatLogFile (logPrefix identifier) currentEntryId)
              putMVar currentState handle
   return fLog
 
-fileWriter :: MVar FHandle -> TVar ([Lazy.ByteString], [IO ()]) -> ThreadId -> IO ()
-fileWriter currentState queue parentTid = forever $ do
+fileWriter :: Archiver -> MVar FHandle -> TVar ([Lazy.ByteString], [IO ()]) -> ThreadId -> IO ()
+fileWriter archiver currentState queue parentTid = forever $ do
   (entries, actions) <- atomically $ do
     (entries, actions) <- readTVar queue
     when (null entries && null actions) retry
@@ -117,7 +116,7 @@ fileWriter currentState queue parentTid = forever $ do
     return (reverse entries, reverse actions)
   handle (\e -> throwTo parentTid (e :: IOException)) $
     withMVar currentState $ \fd -> do
-      let arch = Archive.packEntries entries
+      let arch = archiveWrite archiver entries
       writeToDisk fd (repack arch)
   sequence_ actions
   yield
@@ -151,14 +150,10 @@ closeFileLog fLog =
     _ <- forkIO $ forM_ (logThreads fLog) killThread
     return $ error "Data.Acid.Log: FileLog has been closed"
 
-readEntities :: FilePath -> IO [Lazy.ByteString]
-readEntities path = do
+readEntities :: Archiver -> FilePath -> IO [Lazy.ByteString]
+readEntities archiver path = do
   archive <- Lazy.readFile path
-  return $ worker (Archive.readEntries archive)
- where
-  worker Done              = []
-  worker (Next entry next) = entry : worker next
-  worker (Fail msg)        = error $ "Data.Acid.Log: " <> msg
+  return $ entriesToList (archiveRead archiver archive)
 
 ensureLeastEntryId :: FileLog object -> EntryId -> IO ()
 ensureLeastEntryId fLog youngestEntry = do
@@ -171,7 +166,7 @@ ensureLeastEntryId fLog youngestEntry = do
 -- Read all durable entries younger than the given EntryId.
 -- Note that entries written during or after this call won't
 -- be included in the returned list.
-readEntriesFrom :: SafeCopy object => FileLog object -> EntryId -> IO [object]
+readEntriesFrom :: FileLog object -> EntryId -> IO [object]
 readEntriesFrom fLog youngestEntry = do
   -- Cut the log so we can read written entries without interfering
   -- with the writing of new entries.
@@ -187,15 +182,16 @@ readEntriesFrom fLog youngestEntry = do
   -- cereal-0.3.5.2 and binary-0.7.1.0. The code should revert back
   -- to lazy bytestrings once the bug has been fixed.
   archive <- liftM Lazy.fromChunks $ mapM (Strict.readFile . snd) relevant
-  let entries = entriesToList $ readEntries archive
-  return $ map decode'
+  let entries = entriesToList $ archiveRead (logArchiver identifier) archive
+  return $ map (decode' identifier)
          $ take (entryCap - youngestEntry)             -- Take events under the eventCap.
          $ drop (youngestEntry - firstEntryId) entries -- Drop entries that are too young.
  where
   rangeStart (firstEntryId, _path) = firstEntryId
+  identifier = logIdentifier fLog
 
 -- Obliterate log entries younger than or equal to the EventId. Very unsafe, can't be undone
-rollbackTo :: SafeCopy object => LogKey object -> EntryId -> IO ()
+rollbackTo :: LogKey object -> EntryId -> IO ()
 rollbackTo identifier youngestEntry = do
   logFiles <- findLogFiles identifier
   let sorted = sort logFiles
@@ -205,24 +201,24 @@ rollbackTo identifier youngestEntry = do
         | otherwise = do
             archive <- Strict.readFile path
             pathHandle <- openFile path WriteMode
-            let entries = entriesToList $ readEntries (Lazy.fromChunks [archive])
+            let entries = entriesToList $ archiveRead (logArchiver identifier) (Lazy.fromChunks [archive])
                 entriesToKeep = take (youngestEntry - rangeStart + 1) entries
-                lengthToKeep = Lazy.length (packEntries entriesToKeep)
+                lengthToKeep = Lazy.length (archiveWrite (logArchiver identifier) entriesToKeep)
             hSetFileSize pathHandle (fromIntegral lengthToKeep)
             hClose pathHandle
   loop (reverse sorted)
 
 -- Obliterate log entries as long as the filterFn returns True.
-rollbackWhile :: SafeCopy object => LogKey object -> (object -> Bool) -> IO ()
+rollbackWhile :: LogKey object -> (object -> Bool) -> IO ()
 rollbackWhile identifier filterFn = do
   logFiles <- findLogFiles identifier
   let sorted = sort logFiles
       loop [] = return ()
       loop ((_rangeStart, path) : xs) = do
         archive <- Strict.readFile path
-        let entries = entriesToList $ readEntries (Lazy.fromChunks [archive])
-            entriesToSkip = takeWhile (filterFn . decode') $ reverse entries
-            skip_size = Lazy.length (packEntries entriesToSkip)
+        let entries = entriesToList $ archiveRead (logArchiver identifier) (Lazy.fromChunks [archive])
+            entriesToSkip = takeWhile (filterFn . decode' identifier) $ reverse entries
+            skip_size = Lazy.length (archiveWrite (logArchiver identifier) entriesToSkip)
             orig_size = fromIntegral $ Strict.length archive
             new_size = orig_size - skip_size
         if new_size == 0
@@ -295,7 +291,7 @@ cutFileLog fLog = do
 -- Implementation: Search the newest log files first. Once a file
 --                 containing at least one valid entry is found,
 --                 return the last entry in that file.
-newestEntry :: SafeCopy object => LogKey object -> IO (Maybe object)
+newestEntry :: LogKey object -> IO (Maybe object)
 newestEntry identifier = do
   logFiles <- findLogFiles identifier
   let sorted = reverse $ sort logFiles
@@ -308,9 +304,9 @@ newestEntry identifier = do
     -- cereal-0.3.5.2 and binary-0.7.1.0. The code should revert back
     -- to lazy bytestrings once the bug has been fixed.
     archive <- fmap Lazy.fromStrict $ Strict.readFile logFile
-    case Archive.readEntries archive of
+    case archiveRead (logArchiver identifier) archive of
       Done            -> worker logFiles
-      Next entry next -> return $ Just (decode' (lastEntry entry next))
+      Next entry next -> return $ Just (decode' identifier (lastEntry entry next))
       Fail msg        -> error $ "Data.Acid.Log: " <> msg
   lastEntry entry Done          = entry
   lastEntry entry (Fail msg)    = error $ "Data.Acid.Log: " <> msg
@@ -319,14 +315,15 @@ newestEntry identifier = do
 -- Schedule a new log entry. This call does not block
 -- The given IO action runs once the object is durable. The IO action
 -- blocks the serialization of events so it should be swift.
-pushEntry :: SafeCopy object => FileLog object -> object -> IO () -> IO ()
+pushEntry :: FileLog object -> object -> IO () -> IO ()
 pushEntry fLog object finally = atomically $ do
   tid <- readTVar (logNextEntryId fLog)
   writeTVar (logNextEntryId fLog) $! tid+1
   (entries, actions) <- readTVar (logQueue fLog)
   writeTVar (logQueue fLog) ( encoded : entries, finally : actions )
  where
-  encoded = Lazy.fromChunks [ Strict.copy $ Put.runPut (safePut object) ]
+  encoded = Lazy.fromChunks [ Strict.copy $ Lazy.toStrict $
+              serialiserEncode (logSerialiser (logIdentifier fLog)) object ]
 
 -- The given IO action is executed once all previous entries are durable.
 pushAction :: FileLog object -> IO () -> IO ()
@@ -340,8 +337,8 @@ askCurrentEntryId fLog = atomically $
 
 
 -- FIXME: Check for unused input.
-decode' :: SafeCopy object => Lazy.ByteString -> object
-decode' inp =
-  case Get.runGetLazy safeGet inp of
+decode' :: LogKey object -> Lazy.ByteString -> object
+decode' s inp =
+  case serialiserDecode (logSerialiser s) inp of
     Left msg  -> error $ "Data.Acid.Log: " <> msg
     Right val -> val

@@ -93,6 +93,6 @@ instance Method LookupKey where
 instance QueryEvent LookupKey
 
 instance IsAcidic KeyValue where
-    acidEvents = [ UpdateEvent (\(InsertKey key value) -> insertKey key value)
-                 , QueryEvent (\(LookupKey key) -> lookupKey key)
+    acidEvents = [ UpdateEvent (\(InsertKey key value) -> insertKey key value) safeCopyMethodSerialiser
+                 , QueryEvent (\(LookupKey key) -> lookupKey key)              safeCopyMethodSerialiser
                  ]

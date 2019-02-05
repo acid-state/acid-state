@@ -114,7 +114,6 @@ import Data.ByteString.Char8                         ( pack )
 import qualified Data.ByteString.Lazy                as Lazy
 import Data.IORef                                    ( newIORef, readIORef, writeIORef )
 import Data.Serialize
-import Data.SafeCopy                                 ( SafeCopy, safeGet, safePut )
 import Data.Set                                      ( Set, member )
 import Data.Typeable                                 ( Typeable )
 import GHC.IO.Exception                              ( IOErrorType(..) )
@@ -217,8 +216,7 @@ sharedSecretPerform pw cc =
 
      see also: 'openRemoteState' and 'sharedSecretCheck'.
  -}
-acidServer :: SafeCopy st =>
-              (CommChannel -> IO Bool) -- ^ check authentication, see 'sharedSecretPerform'
+acidServer :: (CommChannel -> IO Bool) -- ^ check authentication, see 'sharedSecretPerform'
            -> PortID                   -- ^ Port to listen on
            -> AcidState st             -- ^ state to serve
            -> IO ()
@@ -240,8 +238,7 @@ acidServer checkAuth port acidState
      Can be useful when fine-tuning of socket binding parameters is needed
      (for example, listening on a particular network interface, IPv4/IPv6 options).
  -}
-acidServer' :: SafeCopy st =>
-              (CommChannel -> IO Bool) -- ^ check authentication, see 'sharedSecretPerform'
+acidServer' :: (CommChannel -> IO Bool) -- ^ check authentication, see 'sharedSecretPerform'
            -> Socket                   -- ^ binded socket to accept connections from
            -> AcidState st             -- ^ state to serve
            -> IO ()
@@ -312,8 +309,7 @@ instance Serialize Response where
 
      This function is generally only needed if you are adding a new communication channel.
 -}
-process :: SafeCopy st =>
-           CommChannel  -- ^ a connected, authenticated communication channel
+process :: CommChannel  -- ^ a connected, authenticated communication channel
         -> AcidState st -- ^ state to share
         -> IO ()
 process CommChannel{..} acidState
@@ -483,13 +479,15 @@ processRemoteState reconnect
 
        return (toAcidState $ RemoteState actor (shutdown actorTID))
 
-remoteQuery :: QueryEvent event => RemoteState (EventState event) -> event -> IO (EventResult event)
-remoteQuery acidState event
-  = do let encoded = runPutLazy (safePut event)
+remoteQuery :: QueryEvent event => RemoteState (EventState event) -> MethodMap (EventState event) -> event -> IO (EventResult event)
+remoteQuery acidState mmap event
+  = do let encoded = encodeMethod ms event
        resp <- remoteQueryCold acidState (methodTag event, encoded)
-       return (case runGetLazyFix safeGet resp of
+       return (case decodeResult ms resp of
                  Left msg -> error $ "Data.Acid.Remote: " <> msg
                  Right result -> result)
+  where
+    (_, ms) = lookupHotMethodAndSerialiser mmap event
 
 remoteQueryCold :: RemoteState st -> Tagged Lazy.ByteString -> IO Lazy.ByteString
 remoteQueryCold rs@(RemoteState fn _shutdown) event
@@ -500,16 +498,18 @@ remoteQueryCold rs@(RemoteState fn _shutdown) event
                                remoteQueryCold rs event
          Acknowledgement    -> error "Data.Acid.Remote: remoteQueryCold got Acknowledgement. That should never happen."
 
-scheduleRemoteUpdate :: UpdateEvent event => RemoteState (EventState event) -> event -> IO (MVar (EventResult event))
-scheduleRemoteUpdate (RemoteState fn _shutdown) event
-  = do let encoded = runPutLazy (safePut event)
+scheduleRemoteUpdate :: UpdateEvent event => RemoteState (EventState event) -> MethodMap (EventState event) -> event -> IO (MVar (EventResult event))
+scheduleRemoteUpdate (RemoteState fn _shutdown) mmap event
+  = do let encoded = encodeMethod ms event
        parsed <- newEmptyMVar
        respRef <- fn (RunUpdate (methodTag event, encoded))
        forkIO $ do Result resp <- takeMVar respRef
-                   putMVar parsed (case runGetLazyFix safeGet resp of
+                   putMVar parsed (case decodeResult ms resp of
                                       Left msg -> error $ "Data.Acid.Remote: " <> msg
                                       Right result -> result)
        return parsed
+  where
+    (_, ms) = lookupHotMethodAndSerialiser mmap event
 
 scheduleRemoteColdUpdate :: RemoteState st -> Tagged Lazy.ByteString -> IO (MVar Lazy.ByteString)
 scheduleRemoteColdUpdate (RemoteState fn _shutdown) event
@@ -532,15 +532,17 @@ createRemoteArchive (RemoteState fn _shutdown)
   = do Acknowledgement <- takeMVar =<< fn CreateArchive
        return ()
 
-toAcidState :: IsAcidic st => RemoteState st -> AcidState st
+toAcidState :: forall st . IsAcidic st => RemoteState st -> AcidState st
 toAcidState remote
-  = AcidState { _scheduleUpdate    = scheduleRemoteUpdate remote
+  = AcidState { _scheduleUpdate    = scheduleRemoteUpdate remote mmap
               , scheduleColdUpdate = scheduleRemoteColdUpdate remote
-              , _query             = remoteQuery remote
+              , _query             = remoteQuery remote mmap
               , queryCold          = remoteQueryCold remote
               , createCheckpoint   = createRemoteCheckpoint remote
               , createArchive      = createRemoteArchive remote
               , closeAcidState     = closeRemoteState remote
               , acidSubState       = mkAnyState remote
               }
-
+  where
+    mmap :: MethodMap st
+    mmap = mkMethodMap (eventsToMethods acidEvents)
