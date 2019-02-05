@@ -1,12 +1,37 @@
+0.15.0
+======
+
+ - change text of error messages to include module names
+   ([#116](https://github.com/acid-state/acid-state/pull/116))
+ - depend on filelock library to avoid locking bug
+   ([#91](https://github.com/acid-state/acid-state/pull/91))
+ - permit events that are polymorphic in the base monad, with a MonadReader/MonadState constraint
+   ([#94](https://github.com/acid-state/acid-state/pull/94))
+ - fix a minor memory leak
+   ([#104](https://github.com/acid-state/acid-state/pull/104))
+ - add a test suite and extend examples
+   ([#98](https://github.com/acid-state/acid-state/pull/98))
+ - improve benchmarks
+   ([#113](https://github.com/acid-state/acid-state/pull/113))
+ - expose internal modules (subject to change in the future)
+
+0.14.3
+======
+
+ - support building on GHC 8.2
+ - update links from seize.it to github.com
+
 0.14.2
 ======
 
- - createCheckpoint now cuts a new events file (bug #74)
+ - createCheckpoint now cuts a new events file
+   ([#74](https://github.com/acid-state/acid-state/pull/74))
 
 0.14.1
 ======
 
- - fix bug in archiveLog that resulted in logs being moved prematurely (bug #22)
+ - fix bug in archiveLog that resulted in logs being moved prematurely
+   ([#22](https://github.com/acid-state/acid-state/issues/22))
  - tweaks for GHC 8.0.x, template-haskell 2.11.x
  - fix compilation of benchmarks
 
@@ -22,4 +47,4 @@
    which are compiled against safecopy 0.8 / cereal 0.4.
 
  - additional fixes for TH and kinded type variables
-   [https://github.com/acid-state/acid-state/pull/56](https://github.com/acid-state/acid-state/pull/56)
+   ([#56](https://github.com/acid-state/acid-state/pull/56))
