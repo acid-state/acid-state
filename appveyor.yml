@@ -50,5 +50,5 @@ build: off
 test_script:
  - "cabal %CABOPTS% new-build %TEST% %BENCH% -j1 all"
  # state-machine test and the benchmarks currently fail as they assume POSIX file semantics
- - if [%TEST%]==[--enable-tests] cabal %CABOPTS% new-test -f +skip-state-machine-test
+ - if [%TEST%]==[--enable-tests] cabal %CABOPTS% new-test -f +skip-state-machine-test all
  # - if [%BENCH%]==[--enable-benchmarks] cabal %CABOPTS% new-bench
