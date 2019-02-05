@@ -25,10 +25,10 @@ module Data.Acid.Internal.Local
     ) where
 
 import Data.Acid.Internal.Archive
-import Data.Acid.Log as Log
+import Data.Acid.Internal.Log as Log
 import Data.Acid.Internal.Core
-import Data.Acid.Common
-import Data.Acid.Abstract
+import Data.Acid.Internal.Common
+import Data.Acid.Internal.Abstract
 
 import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar )
 import Control.Exception              ( onException, evaluate, Exception, throwIO )

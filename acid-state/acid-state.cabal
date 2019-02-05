@@ -31,19 +31,17 @@ flag skip-state-machine-test
 
 Library
   Exposed-Modules:     Data.Acid,
-                       Data.Acid.Archive,
-                       Data.Acid.Local,
-                       Data.Acid.Remote,
+                       Data.Acid.Abstract,
                        Data.Acid.Advanced,
-                       Data.Acid.Core,
-                       Data.Acid.TemplateHaskell
-
-  Reexported-modules:  Data.Acid.Abstract,
+                       Data.Acid.Archive,
                        Data.Acid.Common,
-                       Data.Acid.CRC,
+                       Data.Acid.Core,
+                       Data.Acid.Local,
                        Data.Acid.Log,
                        Data.Acid.Memory,
-                       Data.Acid.Memory.Pure
+                       Data.Acid.Memory.Pure,
+                       Data.Acid.Remote,
+                       Data.Acid.TemplateHaskell
 
   Build-depends:       acid-state-internal == 0.16.0,
                        array,

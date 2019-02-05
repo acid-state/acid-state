@@ -1,5 +1,5 @@
 {-# LANGUAGE RankNTypes, TypeFamilies, GADTs, CPP #-}
-module Data.Acid.Abstract
+module Data.Acid.Internal.Abstract
     ( AcidState(..)
     , scheduleUpdate
     , groupUpdates
@@ -11,7 +11,7 @@ module Data.Acid.Abstract
     , downcast
     ) where
 
-import Data.Acid.Common
+import Data.Acid.Internal.Common
 import Data.Acid.Internal.Core
 
 import Control.Concurrent      ( MVar, takeMVar )

@@ -8,7 +8,7 @@ import Language.Haskell.TH.Ppr
 import Language.Haskell.TH.ExpandSyns
 
 import Data.Acid.Internal.Core
-import Data.Acid.Common
+import Data.Acid.Internal.Common
 
 import Data.List ((\\), nub, delete)
 import Data.Typeable

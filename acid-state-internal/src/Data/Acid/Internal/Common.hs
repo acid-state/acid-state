@@ -9,7 +9,7 @@
 --
 -- Common structures used by the various backends (local, memory).
 --
-module Data.Acid.Common where
+module Data.Acid.Internal.Common where
 
 import Data.Acid.Internal.Core
 

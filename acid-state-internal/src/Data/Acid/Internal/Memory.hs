@@ -10,13 +10,13 @@
 -- AcidState container without a transaction log. Mostly used for testing.
 --
 
-module Data.Acid.Memory
+module Data.Acid.Internal.Memory
     ( openMemoryState
     ) where
 
 import Data.Acid.Internal.Core
-import Data.Acid.Common
-import Data.Acid.Abstract
+import Data.Acid.Internal.Common
+import Data.Acid.Internal.Abstract
 
 import Control.Concurrent             ( newEmptyMVar, putMVar, MVar )
 import Control.Monad.State            ( runState )

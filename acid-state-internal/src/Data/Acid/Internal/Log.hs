@@ -2,7 +2,7 @@
 -- new entries and fetching of old. It can be considered an
 -- extendible array of entries.
 --
-module Data.Acid.Log
+module Data.Acid.Internal.Log
     ( FileLog(..)
     , LogKey(..)
     , EntryId

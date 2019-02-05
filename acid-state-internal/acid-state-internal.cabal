@@ -18,16 +18,16 @@ Source-repository head
   subdir:        acid-state-internal
 
 Library
-  Exposed-Modules:     Data.Acid.Internal.Archive
+  Exposed-Modules:     Data.Acid.Internal.Abstract
+                       Data.Acid.Internal.Archive
+                       Data.Acid.Internal.CRC
+                       Data.Acid.Internal.Common
                        Data.Acid.Internal.Core
                        Data.Acid.Internal.Local
+                       Data.Acid.Internal.Log
+                       Data.Acid.Internal.Memory
+                       Data.Acid.Internal.Memory.Pure
                        Data.Acid.Internal.TemplateHaskell
-                       Data.Acid.Abstract
-                       Data.Acid.Common
-                       Data.Acid.CRC
-                       Data.Acid.Log
-                       Data.Acid.Memory
-                       Data.Acid.Memory.Pure
 
   Other-modules:       Data.Acid.Internal.FileIO
                        Paths_acid_state_internal

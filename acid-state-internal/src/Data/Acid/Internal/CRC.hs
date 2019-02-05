@@ -1,7 +1,7 @@
 {- CRC16 checksum inspired by http://hackage.haskell.org/package/crc16-table
    As of 2011-04-13, this module is about 20x faster than crc16-table.
 -}
-module Data.Acid.CRC
+module Data.Acid.Internal.CRC
     ( crc16
     ) where
 

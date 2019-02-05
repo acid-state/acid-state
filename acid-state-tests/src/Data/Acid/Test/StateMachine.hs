@@ -40,8 +40,8 @@ module Data.Acid.Test.StateMachine
 import           Control.DeepSeq
 import           Control.Exception (Exception, IOException, throw, catch, try, evaluate)
 import           Control.Monad.State
-import qualified Data.Acid.Abstract as Acid
-import qualified Data.Acid.Common as Acid
+import qualified Data.Acid.Internal.Abstract as Acid
+import qualified Data.Acid.Internal.Common as Acid
 import qualified Data.Acid.Internal.Core as Acid
 import           Data.Maybe
 import           Data.Typeable

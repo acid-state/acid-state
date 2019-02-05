@@ -10,7 +10,7 @@
 -- AcidState container without a transaction log. Mostly used for testing.
 --
 
-module Data.Acid.Memory.Pure
+module Data.Acid.Internal.Memory.Pure
     ( IsAcidic(..)
     , AcidState
     , Event(..)
@@ -30,7 +30,7 @@ module Data.Acid.Memory.Pure
     ) where
 
 import Data.Acid.Internal.Core
-import Data.Acid.Common
+import Data.Acid.Internal.Common
 
 import Control.Monad.State
 import Control.Monad.Reader

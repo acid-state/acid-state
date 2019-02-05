@@ -16,7 +16,7 @@ module Data.Acid.Archive
     , defaultArchiver
     ) where
 
-import           Data.Acid.CRC
+import           Data.Acid.Internal.CRC
 import           Data.Acid.Internal.Archive
 
 import qualified Data.ByteString        as Strict
