@@ -28,7 +28,6 @@ Source-repository head
 flag skip-state-machine-test
   description: If enabled, do not build/run the state-machine test
   default: False
-  manual: True
 
 Library
   Exposed-Modules:     Data.Acid,

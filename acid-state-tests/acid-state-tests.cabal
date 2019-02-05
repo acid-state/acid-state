@@ -10,7 +10,7 @@ Maintainer:          Lemmih <lemmih@gmail.com>
 Category:            Database
 Build-type:          Simple
 Cabal-version:       >=1.10
-tested-with:         GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3, GHC == 8.0.2, GHC == 8.2.2, GHC == 8.4.4, GHC == 8.6.3
+tested-with:         GHC == 7.10.3, GHC == 8.0.2, GHC == 8.2.2, GHC == 8.4.4, GHC == 8.6.3
 
 Source-repository head
   type:          git
@@ -31,3 +31,9 @@ Library
 
   default-language:    Haskell2010
   GHC-Options:         -Wall
+
+  -- Cannot build on older versions due to hedgehog's transitive dependencies;
+  -- using `buildable: false` here means `cabal new-build all` will simply skip
+  -- this package and the tests that depend on it.
+  if impl(ghc < 7.10)
+    buildable: False
