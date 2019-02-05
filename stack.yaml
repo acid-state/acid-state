@@ -1,5 +1,7 @@
 packages:
     - acid-state
+    - acid-state-internal
+    - acid-state-tests
 
 resolver: lts-11.15
 
