@@ -372,7 +372,10 @@ makeMethodInstance eventName eventType = do
     instanceD
         instanceContext
         (return ty)
-#if __GLASGOW_HASKELL__ >= 707
+#if __GLASGOW_HASKELL__ >= 807
+        [ tySynInstD (tySynEqn Nothing (AppT (ConT ''MethodResult) <$> structType) (return resultType))
+        , tySynInstD (tySynEqn Nothing (AppT (ConT ''MethodState) <$> structType) (return stateType))
+#elif __GLASGOW_HASKELL__ >= 707
         [ tySynInstD ''MethodResult (tySynEqn [structType] (return resultType))
         , tySynInstD ''MethodState  (tySynEqn [structType] (return stateType))
 #else
