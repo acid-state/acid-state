@@ -27,6 +27,8 @@ module Data.Acid.Local
     , Checkpoint(..)
     , SerialisationLayer(..)
     , defaultSerialisationLayer
+    , mkEventsLogKey
+    , mkCheckpointsLogKey
     ) where
 
 import Data.Acid.Archive
@@ -350,6 +352,20 @@ data SerialisationLayer st =
 defaultSerialisationLayer :: SafeCopy st => SerialisationLayer st
 defaultSerialisationLayer = SerialisationLayer safeCopySerialiser safeCopySerialiser defaultArchiver
 
+mkEventsLogKey :: FilePath -> SerialisationLayer object -> LogKey (Tagged ByteString)
+mkEventsLogKey directory serialisationLayer =
+  LogKey { logDirectory = directory
+         , logPrefix = "events"
+         , logSerialiser = eventSerialiser serialisationLayer
+         , logArchiver   = archiver serialisationLayer }
+
+mkCheckpointsLogKey :: FilePath -> SerialisationLayer object -> LogKey (Checkpoint object)
+mkCheckpointsLogKey directory serialisationLayer =
+  LogKey { logDirectory = directory
+         , logPrefix = "checkpoints"
+         , logSerialiser = checkpointSerialiser serialisationLayer
+         , logArchiver = archiver serialisationLayer }
+
 resumeLocalStateFrom :: (IsAcidic st)
                   => FilePath            -- ^ Location of the checkpoint and transaction files.
                   -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
@@ -371,14 +387,8 @@ resumeLocalStateFrom directory initialState delayLocking serialisationLayer =
         replayEvents lock n st
   where
     lockFile = directory </> "open.lock"
-    eventsLogKey = LogKey { logDirectory = directory
-                          , logPrefix = "events"
-                          , logSerialiser = eventSerialiser serialisationLayer
-                          , logArchiver   = archiver serialisationLayer }
-    checkpointsLogKey = LogKey { logDirectory = directory
-                               , logPrefix = "checkpoints"
-                               , logSerialiser = checkpointSerialiser serialisationLayer
-                               , logArchiver = archiver serialisationLayer }
+    eventsLogKey = mkEventsLogKey directory serialisationLayer
+    checkpointsLogKey = mkCheckpointsLogKey directory serialisationLayer
     loadCheckpoint = do
       mbLastCheckpoint <- Log.newestEntry checkpointsLogKey
       case mbLastCheckpoint of
