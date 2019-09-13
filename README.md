@@ -43,5 +43,7 @@ FAQ
 
 Robustness
 ================
+  - How do I recover a corrupted acid-state database?
+    - acid-state provides an `acid-state-repair` tool. Build it with `stack build` in the root of this repository, you can then call `acid-state-repair` from a directory holding a corrupted database to repair it. In most case it should only drop the last entry, presumably a partial write because of a crash, but if the base is heavily corrupted, it may restore the database to an older state. Your database is always saved in `.bak` files, so that the repair operation is reversible.
   - How well does acid-state deal with errors? 
     - List of Error Scenarios.

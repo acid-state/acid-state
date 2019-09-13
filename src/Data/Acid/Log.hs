@@ -18,6 +18,7 @@ module Data.Acid.Log
     , askCurrentEntryId
     , cutFileLog
     , archiveFileLog
+    , findLogFiles
     ) where
 
 import Data.Acid.Archive (Archiver(..), Entries(..), entriesToList)

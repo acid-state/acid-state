@@ -39,6 +39,7 @@ Library
                        Data.Acid.Log, Data.Acid.CRC,
                        Data.Acid.Abstract, Data.Acid.Core,
                        Data.Acid.TemplateHaskell
+                       Data.Acid.Repair
 
   Other-modules:       Paths_acid_state,
                        FileIO
@@ -72,6 +73,15 @@ Library
 
   default-language:    Haskell2010
   GHC-Options:         -fwarn-unused-imports -fwarn-unused-binds
+
+executable acid-state-repair
+  hs-source-dirs: repair
+  build-depends: acid-state
+               , base
+               , directory
+  main-is: Main.hs
+  default-language:    Haskell2010
+
 
 test-suite specs
   type:                exitcode-stdio-1.0
