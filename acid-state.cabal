@@ -1,5 +1,5 @@
 Name:                acid-state
-Version:             0.15.0
+Version:             0.15.2
 Synopsis:            Add ACID guarantees to any serializable Haskell data structure.
 Description:         Use regular Haskell data structures as your database and get stronger ACID guarantees than most RDBMS offer.
 Homepage:            https://github.com/acid-state/acid-state
@@ -49,7 +49,7 @@ Library
                        bytestring >= 0.10.2,
                        cereal >= 0.4.1.0,
                        containers,
-                       safecopy >= 0.6,
+                       safecopy >= 0.6 && < 0.11,
                        stm >= 2.4,
                        directory,
                        filelock,

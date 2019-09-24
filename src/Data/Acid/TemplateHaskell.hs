@@ -341,6 +341,7 @@ makeSafeCopyInstance eventName eventType
                    (return ty)
                    [ funD 'putCopy [clause [putClause] (normalB (contained putExp)) []]
                    , valD (varP 'getCopy) (normalB (contained getArgs)) []
+                   , funD 'errorTypeName [clause [wildP] (normalB (litE (stringL (pprint ty)))) []]
                    ]
     where TypeAnalysis { tyvars, context, argumentTypes = args } = analyseType eventName eventType
           eventStructName = toStructName eventName
