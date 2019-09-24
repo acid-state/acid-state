@@ -33,7 +33,7 @@ newtype Store k = Store { store :: Map.Map k (Entry k) }
 deriving instance Typeable1 Store
 #endif
 
-instance (Ord k, Serialize k, Typeable k) => SafeCopy (Store k)
+instance (Ord k, Serialize k, SafeCopy k, Typeable k) => SafeCopy (Store k)
 instance (Ord k, Serialize k) => Serialize (Store k)
 
 insertStore
