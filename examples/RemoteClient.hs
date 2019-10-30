@@ -4,7 +4,6 @@ import           Control.Monad.Reader
 import           Data.Acid
 import           Data.Acid.Advanced
 import           Data.Acid.Remote
-import           Network
 import           RemoteCommon
 import           System.Environment
 import           System.IO
@@ -13,7 +12,7 @@ import           System.IO
 -- This is how AcidState is used:
 
 open :: IO (AcidState StressState)
-open = openRemoteState skipAuthenticationPerform "localhost" (PortNumber 8080)
+open = openRemoteState skipAuthenticationPerform "localhost" 8080
 
 main :: IO ()
 main = do args <- getArgs

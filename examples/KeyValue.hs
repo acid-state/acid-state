@@ -11,7 +11,6 @@ import           Control.Applicative
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.SafeCopy
-import           Network
 import           System.Environment
 import           System.Exit
 import           System.IO

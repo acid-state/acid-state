@@ -29,7 +29,7 @@ $(deriveSafeCopy 0 'base ''MyState)
 -- The transaction we will execute over the state.
 
 failEvent :: Update MyState ()
-failEvent = fail "fail!"
+failEvent = pure $ error "fail!"
 
 errorEvent :: Update MyState ()
 errorEvent = error "error!"

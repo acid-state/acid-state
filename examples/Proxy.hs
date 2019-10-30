@@ -11,7 +11,6 @@ import           Data.Acid.Remote
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.SafeCopy
-import           Network
 import           System.Environment
 import           System.IO
 
@@ -45,17 +44,19 @@ openLocal :: IO (AcidState ProxyStressState)
 openLocal = openLocalState (StressState 0)
 
 openRemote :: String -> IO (AcidState ProxyStressState)
-openRemote socket = openRemoteState skipAuthenticationPerform "localhost" (UnixSocket socket)
+openRemote socket = openRemoteState skipAuthenticationPerform "localhost" port
+
+port = 6303
 
 main :: IO ()
 main = do args <- getArgs
           case args of
             ["server", socket]
               -> do acid <- openLocal
-                    acidServer skipAuthenticationCheck (UnixSocket socket) acid
+                    acidServer skipAuthenticationCheck port acid
             ["proxy", from, to]
               -> do acid <- openRemote from
-                    acidServer skipAuthenticationCheck (UnixSocket to) acid
+                    acidServer skipAuthenticationCheck port acid
             ["query", socket]
               -> do acid <- openRemote socket
                     n <- query acid QueryState
