@@ -99,7 +99,7 @@ import Control.Concurrent.STM.TMVar                  ( newEmptyTMVar, readTMVar,
 import Control.Concurrent.STM.TQueue
 import Control.Exception                             ( AsyncException(ThreadKilled)
                                                      , Exception(fromException), IOException, Handler(..)
-                                                     , SomeException, catch, catches, throw )
+                                                     , SomeException, catch, catches, throw, bracketOnError )
 import Control.Exception                             ( throwIO, finally )
 import Control.Monad                                 ( forever, liftM, join, when )
 import Control.Concurrent                            ( ThreadId, forkIO, threadDelay, killThread, myThreadId )
@@ -117,11 +117,11 @@ import Data.Serialize
 import Data.Set                                      ( Set, member )
 import Data.Typeable                                 ( Typeable )
 import GHC.IO.Exception                              ( IOErrorType(..) )
-import Network                                       ( HostName, PortID(..), connectTo, listenOn, withSocketsDo )
-import Network.Socket                                ( Socket, accept, sClose )
+import Network.BSD                                   ( getProtocolNumber, getHostByName, hostAddress )
+import Network.Socket
 import Network.Socket.ByteString                     ( recv, sendAll )
 import System.Directory                              ( removeFile )
-import System.IO                                     ( Handle, hPrint, hFlush, hClose, stderr )
+import System.IO                                     ( Handle, hPrint, hFlush, hClose, stderr, IOMode(..) )
 import System.IO.Error                               ( ioeGetErrorType, isFullError, isDoesNotExistError )
 
 debugStrLn :: String -> IO ()
@@ -164,7 +164,7 @@ socketToCommChannel :: Socket -> CommChannel
 socketToCommChannel socket =
     CommChannel { ccPut     = sendAll socket
                 , ccGetSome = recv    socket
-                , ccClose   = sClose  socket
+                , ccClose   = close  socket
                 }
 
 {- | skip server-side authentication checking entirely. -}
@@ -210,28 +210,31 @@ sharedSecretPerform pw cc =
 {- | Accept connections on @port@ and handle requests using the given 'AcidState'.
      This call doesn't return.
 
-     On Unix®-like systems you can use 'UnixSocket' to communicate
-     using a socket file. To control access, you can set the permissions of
-     the parent directory which contains the socket file.
-
      see also: 'openRemoteState' and 'sharedSecretCheck'.
  -}
 acidServer :: (CommChannel -> IO Bool) -- ^ check authentication, see 'sharedSecretPerform'
-           -> PortID                   -- ^ Port to listen on
+           -> PortNumber               -- ^ Port to listen on
            -> AcidState st             -- ^ state to serve
            -> IO ()
 acidServer checkAuth port acidState
-  = withSocketsDo $
-    do listenSocket <- listenOn port
+  = do listenSocket <- listenOn port
        (acidServer' checkAuth listenSocket acidState) `finally` (cleanup listenSocket)
     where
       cleanup socket =
-          do sClose socket
-             case port of
-#if !defined(mingw32_HOST_OS) && !defined(cygwin32_HOST_OS) && !defined(_WIN32)
-               UnixSocket path -> removeFile path
-#endif
-               _               -> return ()
+          do close socket
+
+listenOn :: PortNumber -> IO Socket
+listenOn port = do
+    proto <- getProtocolNumber "tcp"
+    bracketOnError
+        (socket AF_INET Stream proto)
+        close
+        (\sock -> do
+            setSocketOption sock ReuseAddr 1
+            bind sock (SockAddrInet port 0)
+            listen sock maxListenQueue
+            return sock
+        )
 
 {- | Works the same way as 'acidServer', but uses pre-binded socket @listenSocket@.
 
@@ -343,8 +346,8 @@ data RemoteState st = RemoteState (Command -> IO (MVar Response)) (IO ())
 {- | Connect to an acid-state server which is sharing an 'AcidState'. -}
 openRemoteState :: IsAcidic st =>
                    (CommChannel -> IO ()) -- ^ authentication function, see 'sharedSecretPerform'
-                -> HostName               -- ^ remote host to connect to (ignored when 'PortID' is 'UnixSocket')
-                -> PortID                 -- ^ remote port to connect to
+                -> HostName               -- ^ remote host to connect to
+                -> PortNumber             -- ^ remote port to connect to
                 -> IO (AcidState st)
 openRemoteState performAuthorization host port
   = withSocketsDo $
@@ -354,7 +357,16 @@ openRemoteState performAuthorization host port
       reconnect :: IO CommChannel
       reconnect
           = (do debugStrLn "Reconnecting."
-                handle <- connectTo host port
+                proto <- getProtocolNumber "tcp"
+                handle <- bracketOnError
+                    (socket AF_INET Stream proto)
+                    close  -- only done if there's an error
+                    (\sock -> do
+                      he    <- getHostByName host
+                      connect sock (SockAddrInet port (hostAddress he))
+                      socketToHandle sock ReadWriteMode
+                    )
+
                 let cc = handleToCommChannel handle
                 performAuthorization cc
                 debugStrLn "Reconnected."
