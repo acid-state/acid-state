@@ -25,7 +25,7 @@ On the client-side you:
 'openRemoteState' and 'acidServer' communicate over an unencrypted
 socket. If you need an encrypted connection, see @acid-state-tls@.
 
-On Unix®-like systems you can use 'UnixSocket' to create a socket file for
+On Unix®-like systems you can use 'SockAddrUnix' to create a socket file for
 local communication between the client and server. Access can be
 controlled by setting the permissions of the parent directory
 containing the socket file.
@@ -33,7 +33,7 @@ containing the socket file.
 It is also possible to perform some simple authentication using
 'sharedSecretCheck' and 'sharedSecretPerform'. Keep in mind that
 secrets will be sent in plain-text if you do not use
-@acid-state-tls@. If you are using a 'UnixSocket' additional
+@acid-state-tls@. If you are using a 'SockAddrUnix' additional
 authentication may not be required, so you can use
 'skipAuthenticationCheck' and 'skipAuthenticationPerform'.
 
@@ -78,8 +78,10 @@ module Data.Acid.Remote
     (
     -- * Server/Client
       acidServer
+    , acidServerSockAddr
     , acidServer'
     , openRemoteState
+    , openRemoteStateSockAddr
     -- * Authentication
     , skipAuthenticationCheck
     , skipAuthenticationPerform
@@ -117,9 +119,9 @@ import Data.Serialize
 import Data.Set                                      ( Set, member )
 import Data.Typeable                                 ( Typeable )
 import GHC.IO.Exception                              ( IOErrorType(..) )
-import Network.BSD                                   ( getProtocolNumber, getHostByName, hostAddress )
+import Network.BSD                                   ( PortNumber, getProtocolNumber, getHostByName, hostAddress )
 import Network.Socket
-import Network.Socket.ByteString                     ( recv, sendAll )
+import Network.Socket.ByteString                     as NSB ( recv, sendAll )
 import System.Directory                              ( removeFile )
 import System.IO                                     ( Handle, hPrint, hFlush, hClose, stderr, IOMode(..) )
 import System.IO.Error                               ( ioeGetErrorType, isFullError, isDoesNotExistError )
@@ -163,7 +165,7 @@ handleToCommChannel handle =
 socketToCommChannel :: Socket -> CommChannel
 socketToCommChannel socket =
     CommChannel { ccPut     = sendAll socket
-                , ccGetSome = recv    socket
+                , ccGetSome = NSB.recv socket
                 , ccClose   = close  socket
                 }
 
@@ -207,34 +209,66 @@ sharedSecretPerform pw cc =
           then return ()
           else throwIO (AuthenticationError "shared secret authentication failed.")
 
+{- | Accept connections on @sockAddr@ and handle requests using the given 'AcidState'.
+     This call doesn't return.
+
+     see also: 'acidServer', 'openRemoteState' and 'sharedSecretCheck'.
+ -}
+acidServerSockAddr :: (CommChannel -> IO Bool) -- ^ check authentication, see 'sharedSecretPerform'
+           -> SockAddr                 -- ^ SockAddr to listen on
+           -> AcidState st             -- ^ state to serve
+           -> IO ()
+acidServerSockAddr checkAuth sockAddr acidState
+  = do listenSocket <- listenOn sockAddr
+       (acidServer' checkAuth listenSocket acidState) `finally` (cleanup listenSocket)
+    where
+      cleanup socket =
+          do close socket
+#if !defined(mingw32_HOST_OS) && !defined(cygwin32_HOST_OS) && !defined(_WIN32)
+             case sockAddr of
+               (SockAddrUnix path) -> removeFile path
+               _ -> pure ()
+#endif
+
+
 {- | Accept connections on @port@ and handle requests using the given 'AcidState'.
      This call doesn't return.
 
-     see also: 'openRemoteState' and 'sharedSecretCheck'.
+     see also: 'acidServerSockAddr', 'openRemoteState' and 'sharedSecretCheck'.
  -}
 acidServer :: (CommChannel -> IO Bool) -- ^ check authentication, see 'sharedSecretPerform'
            -> PortNumber               -- ^ Port to listen on
            -> AcidState st             -- ^ state to serve
            -> IO ()
 acidServer checkAuth port acidState
-  = do listenSocket <- listenOn port
-       (acidServer' checkAuth listenSocket acidState) `finally` (cleanup listenSocket)
-    where
-      cleanup socket =
-          do close socket
+  = acidServerSockAddr checkAuth (SockAddrInet port 0) acidState
 
-listenOn :: PortNumber -> IO Socket
-listenOn port = do
+listenOn :: SockAddr -> IO Socket
+listenOn sockAddr = do
+#if !defined(mingw32_HOST_OS) && !defined(cygwin32_HOST_OS) && !defined(_WIN32)
+    proto <- case sockAddr of
+              (SockAddrUnix {}) -> pure 0
+              _                 -> getProtocolNumber "tcp"
+#else
     proto <- getProtocolNumber "tcp"
+#endif
     bracketOnError
-        (socket AF_INET Stream proto)
+        (socket af Stream proto)
         close
         (\sock -> do
             setSocketOption sock ReuseAddr 1
-            bind sock (SockAddrInet port 0)
+            bind sock sockAddr
             listen sock maxListenQueue
             return sock
         )
+
+      where
+        af = case sockAddr of
+          (SockAddrInet {})  -> AF_INET
+          (SockAddrInet6 {}) -> AF_INET6
+#if !defined(mingw32_HOST_OS) && !defined(cygwin32_HOST_OS) && !defined(_WIN32)
+          (SockAddrUnix {})  -> AF_UNIX
+#endif
 
 {- | Works the same way as 'acidServer', but uses pre-binded socket @listenSocket@.
 
@@ -349,21 +383,43 @@ openRemoteState :: IsAcidic st =>
                 -> HostName               -- ^ remote host to connect to
                 -> PortNumber             -- ^ remote port to connect to
                 -> IO (AcidState st)
-openRemoteState performAuthorization host port
+openRemoteState performAuthorization host port =
+   do he    <- getHostByName host
+      openRemoteStateSockAddr performAuthorization (SockAddrInet port (hostAddress he))
+
+{- | Connect to an acid-state server which is sharing an 'AcidState'. -}
+openRemoteStateSockAddr :: IsAcidic st =>
+                   (CommChannel -> IO ()) -- ^ authentication function, see 'sharedSecretPerform'
+                -> SockAddr               -- ^ remote SockAddr to connect to
+                -> IO (AcidState st)
+openRemoteStateSockAddr performAuthorization sockAddr
   = withSocketsDo $
     do processRemoteState reconnect
     where
+      af :: Family
+      af = case sockAddr of
+          (SockAddrInet {})  -> AF_INET
+          (SockAddrInet6 {}) -> AF_INET6
+#if !defined(mingw32_HOST_OS) && !defined(cygwin32_HOST_OS) && !defined(_WIN32)
+          (SockAddrUnix {})  -> AF_UNIX
+#endif
+
       -- | reconnect
       reconnect :: IO CommChannel
       reconnect
           = (do debugStrLn "Reconnecting."
+#if !defined(mingw32_HOST_OS) && !defined(cygwin32_HOST_OS) && !defined(_WIN32)
+                proto <- case sockAddr of
+                           (SockAddrUnix {}) -> pure 0
+                           _                 -> getProtocolNumber "tcp"
+#else
                 proto <- getProtocolNumber "tcp"
+#endif
                 handle <- bracketOnError
-                    (socket AF_INET Stream proto)
+                    (socket af Stream proto)
                     close  -- only done if there's an error
                     (\sock -> do
-                      he    <- getHostByName host
-                      connect sock (SockAddrInet port (hostAddress he))
+                      connect sock sockAddr
                       socketToHandle sock ReadWriteMode
                     )
 

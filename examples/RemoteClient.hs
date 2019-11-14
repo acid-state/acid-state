@@ -4,6 +4,7 @@ import           Control.Monad.Reader
 import           Data.Acid
 import           Data.Acid.Advanced
 import           Data.Acid.Remote
+import           Network.Socket (SockAddr(..))
 import           RemoteCommon
 import           System.Environment
 import           System.IO
@@ -13,6 +14,8 @@ import           System.IO
 
 open :: IO (AcidState StressState)
 open = openRemoteState skipAuthenticationPerform "localhost" 8080
+-- on Unixy systems we could use a Unix Domain Socket
+-- open = openRemoteStateSockAddr skipAuthenticationPerform (SockAddrUnix "remote.socket")
 
 main :: IO ()
 main = do args <- getArgs
