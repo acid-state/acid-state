@@ -235,12 +235,12 @@ rollbackWhile identifier filterFn = do
 -- | Filter out log files that are outside the min_entry/max_entry range.
 --
 --     minEntryId <= x < maxEntryId
-filterLogFiles ::
-  -- | minEntryId
-  Maybe EntryId ->
-  -- | maxEntryId
-  Maybe EntryId ->
-  [(EntryId, FilePath)] -> [(EntryId, FilePath)]
+filterLogFiles
+  :: Maybe EntryId
+  -- ^ minEntryId
+  -> Maybe EntryId
+  -- ^ maxEntryId
+  -> [(EntryId, FilePath)] -> [(EntryId, FilePath)]
 filterLogFiles minEntryIdMb maxEntryIdMb logFiles = worker logFiles
   where
     worker [] = []
