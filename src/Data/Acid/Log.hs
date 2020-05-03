@@ -1,6 +1,5 @@
--- A log is a stack of entries that supports efficient pushing of
--- new entries and fetching of old. It can be considered an
--- extendible array of entries.
+-- | A log is a stack of entries that supports efficient pushing of new entries
+-- and fetching of old. It can be considered an extendible array of entries.
 --
 module Data.Acid.Log
     ( FileLog(..)
@@ -122,7 +121,8 @@ fileWriter archiver currentState queue parentTid = forever $ do
   sequence_ actions
   yield
 
--- Repack a lazy bytestring into larger blocks that can be efficiently written to disk.
+-- | Repack a lazy bytestring into larger blocks that can be efficiently written
+-- to disk.
 repack :: Lazy.ByteString -> [Strict.ByteString]
 repack = worker
   where
@@ -164,9 +164,9 @@ ensureLeastEntryId fLog youngestEntry = do
   cutFileLog fLog
   return ()
 
--- Read all durable entries younger than the given EntryId.
--- Note that entries written during or after this call won't
--- be included in the returned list.
+-- | Read all durable entries younger than the given 'EntryId'. Note that
+-- entries written during or after this call won't be included in the returned
+-- list.
 readEntriesFrom :: FileLog object -> EntryId -> IO [object]
 readEntriesFrom fLog youngestEntry = do
   -- Cut the log so we can read written entries without interfering
@@ -191,7 +191,8 @@ readEntriesFrom fLog youngestEntry = do
   rangeStart (firstEntryId, _path) = firstEntryId
   identifier = logIdentifier fLog
 
--- Obliterate log entries younger than or equal to the EventId. Very unsafe, can't be undone
+-- | Obliterate log entries younger than or equal to the 'EntryId'. Very unsafe,
+-- can't be undone
 rollbackTo :: LogKey object -> EntryId -> IO ()
 rollbackTo identifier youngestEntry = do
   logFiles <- findLogFiles identifier
@@ -209,8 +210,10 @@ rollbackTo identifier youngestEntry = do
             hClose pathHandle
   loop (reverse sorted)
 
--- Obliterate log entries as long as the filterFn returns True.
-rollbackWhile :: LogKey object -> (object -> Bool) -> IO ()
+-- | Obliterate log entries as long as the filter function returns @True@.
+rollbackWhile :: LogKey object
+  -> (object -> Bool) -- ^ the filter function
+  -> IO ()
 rollbackWhile identifier filterFn = do
   logFiles <- findLogFiles identifier
   let sorted = sort logFiles
@@ -229,9 +232,15 @@ rollbackWhile identifier filterFn = do
                    hClose pathHandle
   loop (reverse sorted)
 
--- Filter out log files that are outside the min_entry/max_entry range.
--- minEntryId <= x < maxEntryId
-filterLogFiles :: Maybe EntryId -> Maybe EntryId -> [(EntryId, FilePath)] -> [(EntryId, FilePath)]
+-- | Filter out log files that are outside the min_entry/max_entry range.
+--
+--     minEntryId <= x < maxEntryId
+filterLogFiles
+  :: Maybe EntryId
+  -- ^ minEntryId
+  -> Maybe EntryId
+  -- ^ maxEntryId
+  -> [(EntryId, FilePath)] -> [(EntryId, FilePath)]
 filterLogFiles minEntryIdMb maxEntryIdMb logFiles = worker logFiles
   where
     worker [] = []
@@ -253,8 +262,8 @@ filterLogFiles minEntryIdMb maxEntryIdMb logFiles = worker logFiles
                                         Just maxEntryId -> (< maxEntryId)
     rangeStart (firstEntryId, _path) = firstEntryId
 
--- Move all log files that do not contain entries equal or higher than the given entryId
--- into an Archive/ directory.
+-- | Move all log files that do not contain entries equal or higher than the
+-- given entryId into an @Archive/@ directory.
 archiveFileLog :: FileLog object -> EntryId -> IO ()
 archiveFileLog fLog entryId = do
   logFiles <- findLogFiles (logIdentifier fLog)
@@ -287,11 +296,14 @@ cutFileLog fLog = do
  where
   key = logIdentifier fLog
 
--- Finds the newest entry in the log. Doesn't work on open logs.
--- Do not use after the log has been opened.
--- Implementation: Search the newest log files first. Once a file
---                 containing at least one valid entry is found,
---                 return the last entry in that file.
+-- | Finds the newest entry in the log. Doesn't work on open logs. Do not use
+-- after the log has been opened.
+--
+-- Implementation:
+--
+-- - Search the newest log files first.
+-- - Once a file containing at least one valid entry is found, return the last
+--   entry in that file.
 newestEntry :: LogKey object -> IO (Maybe object)
 newestEntry identifier = do
   logFiles <- findLogFiles identifier
@@ -313,9 +325,9 @@ newestEntry identifier = do
   lastEntry entry (Fail msg)    = error $ "Data.Acid.Log: " <> msg
   lastEntry _ (Next entry next) = lastEntry entry next
 
--- Schedule a new log entry. This call does not block
--- The given IO action runs once the object is durable. The IO action
--- blocks the serialization of events so it should be swift.
+-- | Schedule a new log entry. This call does not block. The given IO action
+-- runs once the object is durable. The IO action blocks the serialization of
+-- events so it should be swift.
 pushEntry :: FileLog object -> object -> IO () -> IO ()
 pushEntry fLog object finally = atomically $ do
   tid <- readTVar (logNextEntryId fLog)
@@ -326,7 +338,7 @@ pushEntry fLog object finally = atomically $ do
   encoded = Lazy.fromChunks [ Strict.copy $ Lazy.toStrict $
               serialiserEncode (logSerialiser (logIdentifier fLog)) object ]
 
--- The given IO action is executed once all previous entries are durable.
+-- | The given IO action is executed once all previous entries are durable.
 pushAction :: FileLog object -> IO () -> IO ()
 pushAction fLog finally = atomically $ do
   (entries, actions) <- readTVar (logQueue fLog)
