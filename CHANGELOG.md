@@ -1,3 +1,22 @@
+0.16.0
+======
+
+ - support network-3.x and ghc-8.8.1
+ - Fix tests
+   ([#131](https://github.com/acid-state/acid-state/pull/131))
+ - Haddock documentation fixes
+ - Update build dependency constraints
+
+0.15.2
+======
+
+ - adds acid-state-repair recovery tool
+   ([#126](https://github.com/acid-state/acid-state/pull/16))
+ - parameterize the underlying serialization library
+   ([#96](https://github.com/acid-state/acid-state/pull/96))
+ - support safecopy-0.10, which supports GHC.Generics
+   ([#128](https://github.com/acid-state/acid-state/pull/128))
+
 0.15.0
 ======
 
