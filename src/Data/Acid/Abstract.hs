@@ -83,7 +83,7 @@ data AcidState st
 --   scheduleUpdate acid EventB
 --   @
 scheduleUpdate :: UpdateEvent event => AcidState (EventState event) -> event -> IO (MVar (EventResult event))
-scheduleUpdate = _scheduleUpdate -- Redirection to make Haddock happy.
+scheduleUpdate acid = _scheduleUpdate acid -- Redirection to make Haddock happy.
 
 -- | Schedule multiple Update events and wait for them to be durable, but
 --   throw away their results. This is useful for importing existing
@@ -110,7 +110,7 @@ update' acidState event = liftIO (update acidState event)
 
 -- | Issue a Query event and wait for its result. Events may be issued in parallel.
 query :: QueryEvent event => AcidState (EventState event) -> event -> IO (EventResult event)
-query = _query -- Redirection to make Haddock happy.
+query acid = _query acid -- Redirection to make Haddock happy.
 
 -- | Same as 'query' but lifted into any monad capable of doing IO.
 query' :: (QueryEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
