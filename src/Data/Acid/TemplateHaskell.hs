@@ -197,11 +197,11 @@ makeIsAcidic ss eventNames stateName tyvars constructors
 --
 -- In this case we have to rename 'x' to the actual state we're going to
 -- use. This is done by 'renameState'.
-eventCxts :: Type        -- ^ State type
+eventCxts :: Type           -- ^ State type
           -> [TyVarBndr ()] -- ^ type variables that will be used for the State type in the IsAcidic instance
-          -> Name        -- ^ 'Name' of the event
-          -> Type        -- ^ 'Type' of the event
-          -> [Pred]      -- ^ extra context to add to 'IsAcidic' instance
+          -> Name           -- ^ 'Name' of the event
+          -> Type           -- ^ 'Type' of the event
+          -> [Pred]         -- ^ extra context to add to 'IsAcidic' instance
 eventCxts targetStateType targetTyVars eventName eventType =
     let TypeAnalysis { context = cxt, stateType }
                     = analyseType eventName eventType
