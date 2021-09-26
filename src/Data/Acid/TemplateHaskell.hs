@@ -97,7 +97,7 @@ makeAcidicWithSerialiser ss stateName eventNames
                  _ -> error "Data.Acid.TemplateHaskell: Unsupported state type. Only 'data', 'newtype' and 'type' are supported."
            _ -> error "Data.Acid.TemplateHaskell: Given state is not a type."
 
-makeAcidic' :: SerialiserSpec -> [Name] -> Name -> [TyVarBndr] -> [Con] -> Q [Dec]
+makeAcidic' :: SerialiserSpec -> [Name] -> Name -> [TyVarBndr ()] -> [Con] -> Q [Dec]
 makeAcidic' ss eventNames stateName tyvars constructors
     = do events <- sequence [ makeEvent ss eventName | eventName <- eventNames ]
          acidic <- makeIsAcidic ss eventNames stateName tyvars constructors
@@ -198,7 +198,7 @@ makeIsAcidic ss eventNames stateName tyvars constructors
 -- In this case we have to rename 'x' to the actual state we're going to
 -- use. This is done by 'renameState'.
 eventCxts :: Type        -- ^ State type
-          -> [TyVarBndr] -- ^ type variables that will be used for the State type in the IsAcidic instance
+          -> [TyVarBndr ()] -- ^ type variables that will be used for the State type in the IsAcidic instance
           -> Name        -- ^ 'Name' of the event
           -> Type        -- ^ 'Type' of the event
           -> [Pred]      -- ^ extra context to add to 'IsAcidic' instance
@@ -227,8 +227,9 @@ eventCxts targetStateType targetTyVars eventName eventType =
       rename pred table t@(ForallT tyvarbndrs cxt typ) = -- this is probably wrong? I don't think acid-state can really handle this type anyway..
           ForallT (map renameTyVar tyvarbndrs) (map (unify table) cxt) (rename pred table typ)
           where
-            renameTyVar (PlainTV name)    = PlainTV  (renameName pred table name)
-            renameTyVar (KindedTV name k) = KindedTV (renameName pred table name) k
+            renameTyVar :: TyVarBndr a -> TyVarBndr a
+            renameTyVar (PlainTV name ann)    = PlainTV  (renameName pred table name) ann
+            renameTyVar (KindedTV name k ann) = KindedTV (renameName pred table name) k ann
       rename pred table (VarT n)   = VarT $ renameName pred table n
       rename pred table (AppT a b) = AppT (rename pred table a) (rename pred table b)
       rename pred table (SigT a k) = SigT (rename pred table a) k
@@ -400,7 +401,7 @@ makeEventInstance eventName eventType
           eventStructName = toStructName eventName
 
 data TypeAnalysis = TypeAnalysis
-    { tyvars :: [TyVarBndr]
+    { tyvars :: [TyVarBndr ()]
     , context :: Cxt
     , argumentTypes :: [Type]
     , stateType :: Type
@@ -455,7 +456,7 @@ analyseType eventName t = go [] [] [] t
                 }
     -- (...) => a
     go tyvars cxt args (ForallT tyvars2 cxt2 a)
-        = go (tyvars ++ tyvars2) (cxt ++ cxt2) args a
+        = go (tyvars ++ fmap void tyvars2) (cxt ++ cxt2) args a
     -- (MonadState state m) => ... -> m result
     -- (MonadReader state m) => ... -> m result
     go tyvars' cxt argumentTypes (AppT (VarT m) resultType)
@@ -489,11 +490,11 @@ findTyVars (SigT a _) = findTyVars a
 findTyVars _          = []
 
 -- | extract the 'Name' from a 'TyVarBndr'
-tyVarBndrName :: TyVarBndr -> Name
-tyVarBndrName (PlainTV n)    = n
-tyVarBndrName (KindedTV n _) = n
+tyVarBndrName :: TyVarBndr a -> Name
+tyVarBndrName (PlainTV n _)    = n
+tyVarBndrName (KindedTV n _ _) = n
 
-allTyVarBndrNames :: [TyVarBndr] -> [Name]
+allTyVarBndrNames :: [TyVarBndr a] -> [Name]
 allTyVarBndrNames tyvars = map tyVarBndrName tyvars
 
 -- | Convert the 'Name' of the event function into the name of the
