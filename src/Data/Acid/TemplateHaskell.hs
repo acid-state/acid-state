@@ -390,7 +390,7 @@ makeMethodInstance eventName eventType = do
 --instance (Typeable key, Typeable val) => UpdateEvent (MyUpdateEvent key val)
 makeEventInstance :: Name -> Type -> DecQ
 makeEventInstance eventName eventType
-    = do let preds = [ ''Typeable ]
+    = do let preds = []
              eventClass = if isUpdate then ''UpdateEvent else ''QueryEvent
              ty = AppT (ConT eventClass) (foldl AppT (ConT eventStructName) (map VarT (allTyVarBndrNames tyvars)))
          instanceD (cxt $ [ classP classPred [varT tyvar] | tyvar <- allTyVarBndrNames tyvars, classPred <- preds ] ++ map return context)
