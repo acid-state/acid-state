@@ -144,7 +144,12 @@ spec = do
         let x = mkName "x"
 
         it "accepts constrained type variables in the state" $ do
-            let binders = [PlainTV (mkName "x")]
+            let binders :: [TyVarBndrUnit]
+#if MIN_VERSION_template_haskell(2,17,0)
+                binders = [PlainTV (mkName "x") ()]
+#else
+                binders = [PlainTV (mkName "x")]
+#endif
                 stateType = ConT ''Maybe `AppT` VarT x
             eventType <- runQ [t| forall a. (Ord a) => Int -> Query (Maybe a) Int|]
 
