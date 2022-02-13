@@ -1,0 +1,7 @@
+packages: .
+
+-- package hedgehog
+constraints: barbies < 1
+
+package acid-state
+  flags: +skip-state-machine-test
