@@ -38,7 +38,7 @@ Source-repository head
 flag skip-state-machine-test
   description: If enabled, do not build/run the state-machine test
   default: False
-  manual: True
+  manual: False
 
 Library
   Exposed-Modules:     Data.Acid,
@@ -186,7 +186,8 @@ benchmark loading-benchmark
     directory,
     system-fileio == 0.3.*,
     system-filepath,
-    criterion >= 1.0.0.0 && < 1.6,
+    -- perRunEnv was added in criterion-1.2.0.0
+    criterion >= 1.2.0.0 && < 1.6,
     mtl,
     base,
     acid-state
