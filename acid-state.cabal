@@ -57,7 +57,7 @@ Library
                        mtl,
                        network < 3.2,
                        network-bsd,
-                       template-haskell < 2.17,
+                       template-haskell < 2.19,
                        th-expand-syns
 
   if os(windows)
