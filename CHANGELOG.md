@@ -1,3 +1,8 @@
+0.16.1
+======
+
+ - Support GHC-9.0.2, template-haskell 2.18
+
 0.16.0
 ======
 
