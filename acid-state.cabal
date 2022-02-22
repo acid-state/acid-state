@@ -10,7 +10,18 @@ Maintainer:          Lemmih <lemmih@gmail.com>
 Category:            Database
 Build-type:          Simple
 Cabal-version:       >=1.10
-tested-with:         GHC == 7.10.3, GHC == 8.0.2, GHC == 8.2.2, GHC == 8.4.3, GHC == 8.6.3, GHC == 8.8.3, GHC == 8.10.1
+
+tested-with:
+  GHC == 9.2.1
+  GHC == 9.0.2
+  GHC == 8.10.7
+  GHC == 8.8.4
+  GHC == 8.6.5
+  GHC == 8.4.4
+  GHC == 8.2.2
+  GHC == 8.0.2
+  GHC == 7.10.3
+
 Extra-source-files:
         CHANGELOG.md
         test-state/OldStateTest1/*.log
@@ -27,7 +38,7 @@ Source-repository head
 flag skip-state-machine-test
   description: If enabled, do not build/run the state-machine test
   default: False
-  manual: True
+  manual: False
 
 Library
   Exposed-Modules:     Data.Acid,
@@ -175,7 +186,8 @@ benchmark loading-benchmark
     directory,
     system-fileio == 0.3.*,
     system-filepath,
-    criterion >= 1.0.0.0 && < 1.6,
+    -- perRunEnv was added in criterion-1.2.0.0
+    criterion >= 1.2.0.0 && < 1.6,
     mtl,
     base,
     acid-state
