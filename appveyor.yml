@@ -2,7 +2,7 @@ clone_folder: "c:\\WORK"
 
 environment:
   global:
-    CABOPTS:  "--store-dir=C:\\SR --http-transport=plain-http --constraint='barbies<1'"
+    CABOPTS:  "--store-dir=C:\\SR --http-transport=plain-http"
   matrix:
     # - GHCVER: "8.6.3"
     #   CHOCOPTS:

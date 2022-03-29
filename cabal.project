@@ -1,8 +1,0 @@
-packages: .
-
--- package hedgehog
-constraints: barbies < 1
-
--- -- This is not picked up by haskell-ci
--- package acid-state
---   flags: +skip-state-machine-test
