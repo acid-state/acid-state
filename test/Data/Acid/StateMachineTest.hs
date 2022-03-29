@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -177,8 +178,15 @@ acidStateInterface fp =
 data Open s (v :: * -> *) = Open s
   deriving Show
 
+#if MIN_VERSION_hedgehog(1,1,0)
+instance FunctorB (Open s) where
+  bmap _ (Open s) = Open s
+instance TraversableB (Open s) where
+  btraverse _ (Open s) = pure (Open s)
+#else
 instance HTraversable (Open s) where
   htraverse _ (Open s) = pure (Open s)
+#endif
 
 -- | Command to open the state, given the interface to use and a
 -- generator for possible initial state values.
@@ -202,8 +210,15 @@ open AcidStateInterface{..} gen_initial_state =
 data WithState s (v :: * -> *) = WithState String (Var (Opaque (Acid.AcidState s)) v)
   deriving (Show)
 
+#if MIN_VERSION_hedgehog(1,1,0)
+instance FunctorB (WithState s) where
+  bmap k (WithState l v) = WithState l (bmap k v)
+instance TraversableB (WithState s) where
+  btraverse k (WithState l v) = WithState l <$> btraverse k v
+#else
 instance HTraversable (WithState s) where
   htraverse k (WithState l v) = WithState l <$> htraverse k v
+#endif
 
 genWithState :: Applicative g => String -> Model s v -> Maybe (g (WithState s v))
 genWithState l model = pure . WithState l <$> modelHandle model
@@ -256,8 +271,15 @@ kill AcidStateInterface{..} =
 data AcidCommand s e (v :: * -> *) = AcidCommand e (Var (Opaque (Acid.AcidState s)) v)
   deriving (Show)
 
+#if MIN_VERSION_hedgehog(1,1,0)
+instance FunctorB (AcidCommand s e) where
+  bmap k (AcidCommand e s) = AcidCommand e (bmap k s)
+instance TraversableB (AcidCommand s e) where
+  btraverse k (AcidCommand e s) = AcidCommand e <$> btraverse k s
+#else
 instance HTraversable (AcidCommand s e) where
   htraverse k (AcidCommand e s) = AcidCommand e <$> htraverse k s
+#endif
 
 -- | Translate an acid-state update into a command that executes the
 -- update, given a generator of inputs.  If the update fails, the
