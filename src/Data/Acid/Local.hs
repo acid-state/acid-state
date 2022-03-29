@@ -464,5 +464,4 @@ toAcidState local
               , createCheckpointAndClose = createLocalCheckpointAndClose local
               , createArchive = createLocalArchive local
               , closeAcidState = closeLocalState local
-              , acidSubState = mkAnyState local
               }

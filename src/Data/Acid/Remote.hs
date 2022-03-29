@@ -610,7 +610,6 @@ toAcidState remote
               , createCheckpointAndClose = createRemoteCheckpoint remote >> closeRemoteState remote
               , createArchive      = createRemoteArchive remote
               , closeAcidState     = closeRemoteState remote
-              , acidSubState       = mkAnyState remote
               }
   where
     mmap :: MethodMap st

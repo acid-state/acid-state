@@ -126,5 +126,4 @@ toAcidState memory
               , createCheckpointAndClose = createMemoryCheckpoint memory >> closeMemoryState memory
               , createArchive      = createMemoryArchive memory
               , closeAcidState     = closeMemoryState memory
-              , acidSubState       = mkAnyState memory
               }
