@@ -3,9 +3,8 @@
 import Benchmark.Prelude
 import Criterion.Main
 import qualified Data.Acid as Acid
-import qualified Data.Acid.Memory as Memory
+import Benchmark.Interface
 import qualified Benchmark.FileSystem as FS
-import qualified Benchmark.Model as Model; import Benchmark.Model (Model)
 import qualified System.Random as Random
 
 
@@ -14,47 +13,7 @@ main = defaultMain [benchmark defaultBenchmarkInterfaces [100,200,300,400]]
 
 benchmark :: [BenchmarkInterface] -> [Int] -> Benchmark
 benchmark bis sizes = env setupWorkingPath $ \ workingPath ->
-    bgroup "" $ map (benchmarksGroup bis workingPath) sizes
-
-
--- | An acid-state interface to be benchmarked.
-data BenchmarkInterface = forall m .
-    BenchmarkInterface
-        { benchName    :: String
-          -- ^ Name of the interface, for use in constructing benchmarks.
-        , benchPersist :: Bool
-          -- ^ Does this interface actually persist data to disk? If
-          -- it doesn't, some benchmarks are not applicable.
-        , benchOpen    :: FS.FilePath -> IO (Acid.AcidState m)
-          -- ^ Open an acid-state component with the given path.  Note
-          -- that the type of the state is encapsulated within
-          -- 'BenchmarkInterface'.
-        , benchUpdate  :: Acid.AcidState m -> [[Int]] -> IO ()
-          -- ^ Execute an 'insert' update against the acid-state.
-        , benchQuery   :: Acid.AcidState m -> IO Int
-          -- ^ Execute a 'sumUp' query against the state.
-        }
-
-memoryBenchmarkInterface :: BenchmarkInterface
-memoryBenchmarkInterface =
-    BenchmarkInterface { benchName    = "Memory"
-                       , benchPersist = False
-                       , benchOpen    = const $ Memory.openMemoryState mempty
-                       , benchUpdate  = \ inst v -> Acid.update inst (Model.Insert v)
-                       , benchQuery   = \ inst -> Acid.query inst Model.SumUp
-                       }
-
-localBenchmarkInterface :: BenchmarkInterface
-localBenchmarkInterface =
-    BenchmarkInterface { benchName    = "Local"
-                       , benchPersist = True
-                       , benchOpen    = \ p -> Acid.openLocalStateFrom (FS.encodeString p) mempty
-                       , benchUpdate  = \ inst v -> Acid.update inst (Model.Insert v)
-                       , benchQuery   = \ inst -> Acid.query inst Model.SumUp
-                       }
-
-defaultBenchmarkInterfaces :: [BenchmarkInterface]
-defaultBenchmarkInterfaces = [memoryBenchmarkInterface, localBenchmarkInterface]
+    bgroup "" $ map (benchmarksGroup workingPath sizes) bis
 
 
 setupWorkingPath :: IO FS.FilePath
@@ -62,22 +21,22 @@ setupWorkingPath = do
   workingPath <- do workingPath <- FS.getTemporaryDirectory
                     rndStr <- replicateM 16 $ Random.randomRIO ('a', 'z')
                     return $ workingPath <> "acid-state" <> "benchmarks" <> "loading" <> FS.decodeString rndStr
-  putStrLn $ "Working under the following temporary directory: " ++ FS.encodeString workingPath
+  putStrLnDebug $ "Working under the following temporary directory: " ++ FS.encodeString workingPath
   FS.removeTreeIfExists workingPath
   FS.createTree workingPath
   return workingPath
 
 
-benchmarksGroup :: [BenchmarkInterface] -> FS.FilePath -> Int -> Benchmark
-benchmarksGroup bis workingPath size =
-  bgroup (show size)
-  [ bgroup (benchName bi) $
+benchmarksGroup :: FS.FilePath -> [Int] -> BenchmarkInterface -> Benchmark
+benchmarksGroup workingPath sizes bi =
+  bgroup (benchName bi)
+  [ bgroup (show size) $
       initializeBenchmarksGroup bi workingPath' size
+    : specialCaseBenchmarksGroup bi workingPath' size
     : if benchPersist bi then [openCloseBenchmarksGroup  bi workingPath' size] else []
-  | bi <- bis
+  | size <- sizes
+  , let workingPath' = workingPath <> FS.decodeString (show size)
   ]
-  where
-    workingPath' = workingPath <> FS.decodeString (show size)
 
 
 -- | The Initialize benchmarks measure how long it takes to open an
@@ -85,11 +44,26 @@ benchmarksGroup bis workingPath size =
 -- data, and optionally checkpoint before closing.
 initializeBenchmarksGroup :: BenchmarkInterface -> FS.FilePath -> Int -> Benchmark
 initializeBenchmarksGroup bi workingPath size =
+  env (evaluate (mkStateValue 100 100)) $ \ state_value ->
   bgroup "Initialize"
   [ bench "Without checkpoint" $ perRunEnv (prepareInitialize bi workingPath) $ \ _ ->
-        initializeClose bi workingPath size
+      initializeClose bi workingPath size state_value
   , bench "With checkpoint" $ perRunEnv (prepareInitialize bi workingPath) $ \ _ ->
-        initializeCheckpointClose bi workingPath size
+      initializeCheckpointClose bi workingPath size state_value
+  ]
+
+-- | These benchmarks perform the same actions as initialize but adapted to
+-- cover two important special cases: many small events, and one checkpoint of a
+-- large value.
+specialCaseBenchmarksGroup :: BenchmarkInterface -> FS.FilePath -> Int -> Benchmark
+specialCaseBenchmarksGroup bi workingPath size =
+  bgroup "Special"
+  [ bench "Small events" $ perRunEnv (prepareInitialize bi workingPath) $ \ _ ->
+        initializeClose bi workingPath size (mkStateValue 0 0)
+
+  , env (evaluate (mkStateValue size 50000)) $ \state_value ->
+      bench "Large checkpoint" $ perRunEnv (prepareInitialize bi workingPath) $ \ _ ->
+        initializeCheckpointClose bi workingPath 1 state_value
   ]
 
 prepareInitialize :: BenchmarkInterface -> FS.FilePath -> IO ()
@@ -122,7 +96,7 @@ openCloseBenchmarksGroup bi workingPath size =
 -- transaction logs), then checkpoints.
 prepareOpenCloseBenchmarksGroup :: BenchmarkInterface -> FS.FilePath -> Int -> IO (FS.FilePath, FS.FilePath)
 prepareOpenCloseBenchmarksGroup bi workingPath size = do
-  putStrLn $ "Preparing instances for size " ++ show size
+  putStrLnDebug $ "Preparing instances for size " ++ show size
 
   let
     logsInstancePath = workingPath <> "logs-instance"
@@ -131,35 +105,34 @@ prepareOpenCloseBenchmarksGroup bi workingPath size = do
   FS.createTree logsInstancePath
   FS.createTree checkpointInstancePath
 
-  putStrLn "Initializing"
-  initialize bi checkpointInstancePath size $ \inst -> do
+  putStrLnDebug "Initializing"
+  initialize bi checkpointInstancePath size (mkStateValue 100 100) $ \inst -> do
 
-    putStrLn "Copying"
+    putStrLnDebug "Copying"
     FS.copy checkpointInstancePath logsInstancePath
     FS.removeFile $ logsInstancePath <> "open.lock"
 
-    putStrLn "Checkpointing"
+    putStrLnDebug "Checkpointing"
     Acid.createCheckpoint inst
 
-    putStrLn "Closing"
+    putStrLnDebug "Closing"
     Acid.closeAcidState inst
 
     return (logsInstancePath, checkpointInstancePath)
 
 
-initialize :: BenchmarkInterface -> FS.FilePath ->  Int -> (forall m . Acid.AcidState m -> IO r) -> IO r
-initialize BenchmarkInterface{..} p size k = do
+initialize :: BenchmarkInterface -> FS.FilePath -> Int -> StateValue -> (forall m . Acid.AcidState m -> IO r) -> IO r
+initialize BenchmarkInterface{..} p size value k = do
     inst <- benchOpen p
-    let values = replicate size $ replicate 100 $ replicate 100 1
-    mapM_ (benchUpdate inst) values
+    replicateM_ size (benchUpdate inst value)
     k inst
 
-initializeClose :: BenchmarkInterface -> FS.FilePath -> Int -> IO ()
-initializeClose bi p size = initialize bi p size Acid.closeAcidState
+initializeClose :: BenchmarkInterface -> FS.FilePath -> Int -> StateValue -> IO ()
+initializeClose bi p size value = initialize bi p size value Acid.closeAcidState
 
-initializeCheckpointClose :: BenchmarkInterface -> FS.FilePath -> Int -> IO ()
-initializeCheckpointClose bi p size =
-  initialize bi p size $ \ inst -> do
+initializeCheckpointClose :: BenchmarkInterface -> FS.FilePath -> Int -> StateValue -> IO ()
+initializeCheckpointClose bi p size value =
+  initialize bi p size value $ \ inst -> do
     Acid.createCheckpoint inst
     Acid.closeAcidState inst
 
@@ -173,3 +146,8 @@ openQueryClose BenchmarkInterface{..} p = do
     n <- benchQuery inst
     Acid.closeAcidState inst
     return n
+
+
+putStrLnDebug :: String -> IO ()
+-- putStrLnDebug = putStrLn
+putStrLnDebug _ = pure ()

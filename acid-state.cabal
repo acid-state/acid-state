@@ -179,6 +179,7 @@ benchmark loading-benchmark
     Benchmark.hs
   other-modules:
     Benchmark.FileSystem
+    Benchmark.Interface
     Benchmark.Model
     Benchmark.Prelude
   build-depends:
@@ -214,5 +215,16 @@ benchmark loading-benchmark
     TemplateHaskell
     OverloadedStrings
     DeriveDataTypeable
-  ghc-options:
-    -O2
+
+  if impl(ghc >= 8.10)
+    ghc-options:
+      -O2
+      -rtsopts
+      -threaded
+      "-with-rtsopts=-T -N1 -I0 -A32m --nonmoving-gc"
+  else
+    ghc-options:
+      -O2
+      -rtsopts
+      -threaded
+      "-with-rtsopts=-T -N1 -I0 -A32m"
