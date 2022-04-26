@@ -8,6 +8,7 @@
 -- Portability :  non-portable (uses GHC extensions)
 --
 -- AcidState container without a transaction log. Mostly used for testing.
+-- Supports Atomicity, Consistency and Isolation, but not Durability.
 --
 
 module Data.Acid.Memory
@@ -43,7 +44,8 @@ data MemoryState st
                   , localCopy    :: IORef st
                   } deriving (Typeable)
 
--- | Create an AcidState given an initial value.
+-- | Create an 'AcidState' given an initial value.  The state is kept only in
+-- memory, so it is not durable.
 openMemoryState :: (IsAcidic st)
               => st                          -- ^ Initial state value.
               -> IO (AcidState st)
@@ -53,8 +55,7 @@ openMemoryState initialState
          return $ toAcidState MemoryState { localCore = core, localCopy = ref }
 
 
--- | Issue an Update event and return immediately. The event is not durable
---   before the MVar has been filled but the order of events is honored.
+-- | Issue an Update event and return immediately. The order of events is honored.
 --   The behavior in case of exceptions is exactly the same as for 'update'.
 --
 --   If EventA is scheduled before EventB, EventA /will/ be executed before EventB:
