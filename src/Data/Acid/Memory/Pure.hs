@@ -9,6 +9,11 @@
 --
 -- AcidState container without a transaction log. Mostly used for testing.
 --
+-- This module consists of internal implementation details for
+-- "Data.Acid.Memory".  You should not normally need to import it.  Call
+-- 'Data.Acid.Memory.openMemoryState' and thereafter use the API from
+-- "Data.Acid" instead.
+--
 
 module Data.Acid.Memory.Pure
     ( IsAcidic(..)
@@ -35,18 +40,8 @@ import Data.Acid.Common
 import Control.Monad.State
 import Control.Monad.Reader
 
-{-| State container offering full ACID (Atomicity, Consistency, Isolation and Durability)
-    guarantees.
-
-    [@Atomicity@]  State changes are all-or-nothing. This is what you'd expect of any state
-                   variable in Haskell and AcidState doesn't change that.
-
-    [@Consistency@] No event or set of events will break your data invariants.
-
-    [@Isolation@] Transactions cannot interfere with each other even when issued in parallel.
-
-    [@Durability@] Successful transaction are guaranteed to survive system failure (both
-                   hardware and software).
+{-| Pure state value used internally. This is not the same as
+  'Data.Acid.AcidState' from "Data.Acid".
 -}
 data AcidState st
     = AcidState { localMethods :: MethodMap st
