@@ -14,8 +14,12 @@ import Data.List ((\\), nub, delete)
 import Data.SafeCopy
 import Data.Typeable
 import Data.Char
+#if !MIN_VERSION_base(4,11,0)
 import Data.Monoid ((<>))
+#endif
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative
+#endif
 import Control.Monad
 import Control.Monad.State (MonadState)
 import Control.Monad.Reader (MonadReader)

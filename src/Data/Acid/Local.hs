@@ -41,7 +41,9 @@ import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar )
 import Control.Exception              ( onException, evaluate, Exception, throwIO )
 import Control.Monad.State            ( runState )
 import Control.Monad                  ( join )
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative            ( (<$>), (<*>) )
+#endif
 import Data.ByteString.Lazy           ( ByteString )
 import qualified Data.ByteString.Lazy as Lazy ( length )
 

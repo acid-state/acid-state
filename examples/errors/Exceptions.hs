@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeFamilies       #-}
@@ -7,6 +8,9 @@ module Exceptions (main, test) where
 import           Data.Acid
 import           Data.Acid.Local     (createCheckpointAndClose)
 
+#if !MIN_VERSION_base(4,8,0)
+import           Control.Applicative
+#endif
 import           Control.Monad
 import           Control.Monad.State ( get, put )
 import           Data.SafeCopy

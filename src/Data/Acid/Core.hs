@@ -51,7 +51,9 @@ import Control.Concurrent                 ( MVar, newMVar, withMVar
 import Control.Monad                      ( liftM )
 import Control.Monad.State                ( State, runState )
 import qualified Data.Map as Map
+#if !MIN_VERSION_base(4,11,0)
 import Data.Monoid                        ((<>))
+#endif
 import Data.ByteString.Lazy as Lazy       ( ByteString )
 import Data.ByteString.Lazy.Char8 as Lazy ( pack, unpack )
 

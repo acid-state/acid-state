@@ -11,7 +11,7 @@ import Data.Acid.Local (mkEventsLogKey, mkCheckpointsLogKey)
 import Data.Acid.Log (LogKey)
 import qualified Data.Acid.Log as Log
 import qualified Data.ByteString.Lazy as Lazy
-import Data.List
+import Data.List (sort)
 import System.Directory
 import System.FilePath.Posix
 import System.IO (hClose, openTempFile)

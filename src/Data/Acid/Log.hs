@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 -- | A log is a stack of entries that supports efficient pushing of new entries
 -- and fetching of old. It can be considered an extendible array of entries.
 --
@@ -34,9 +36,11 @@ import Control.Concurrent.STM
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict
 import qualified Data.ByteString.Unsafe as Strict
-import Data.List
+import Data.List                                 ( (\\), stripPrefix, sort )
 import Data.Maybe
-import Data.Monoid                               ((<>))
+#if !MIN_VERSION_base(4,11,0)
+import Data.Monoid                               ( (<>) )
+#endif
 import Text.Printf                               ( printf )
 
 import Paths_acid_state                          ( version )
@@ -268,8 +272,8 @@ archiveFileLog :: FileLog object -> EntryId -> IO ()
 archiveFileLog fLog entryId = do
   logFiles <- findLogFiles (logIdentifier fLog)
   let sorted = sort logFiles
-      relevant = filterLogFiles Nothing (Just entryId) sorted \\
-                 filterLogFiles (Just entryId) (Just (entryId+1))  sorted
+      relevant = filterLogFiles Nothing (Just entryId) sorted
+              \\ filterLogFiles (Just entryId) (Just (entryId+1))  sorted
 
   createDirectoryIfMissing True archiveDir
   forM_ relevant $ \(_startEntry, logFilePath) ->
