@@ -6,7 +6,7 @@ module ChangeVersion (main, test) where
 import           Data.Acid
 
 import           Control.Exception
-import           Control.Monad.State
+import           Control.Monad
 import           Data.SafeCopy
 import           System.Directory
 import           System.Environment

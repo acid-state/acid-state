@@ -8,7 +8,8 @@ import           Data.Acid
 import           Data.Acid.Advanced
 
 import           Control.Applicative
-import           Control.Monad.Reader
+import           Control.Monad
+import           Control.Monad.Reader (ask)
 import qualified Control.Monad.State  as State
 import           Data.SafeCopy
 import           System.Environment

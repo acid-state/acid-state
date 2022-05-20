@@ -6,7 +6,7 @@ module ChangeState (main, test) where
 import           Data.Acid
 
 import           Control.Exception
-import           Control.Monad.State
+import           Control.Monad
 import           Data.SafeCopy
 import           System.Directory
 import           System.Environment
@@ -56,7 +56,7 @@ test = do
     putStrLn "ChangeState done"
   where
     hdl (ErrorCall msg)
-      | "Could not parse saved checkpoint due to the following error: too few bytes\nFrom:\tChangeState.SecondState:\n\tdemandInput\n\n" `isSuffixOf` msg 
+      | "Could not parse saved checkpoint due to the following error: too few bytes\nFrom:\tChangeState.SecondState:\n\tdemandInput\n\n" `isSuffixOf` msg
       = putStrLn $ "Caught error: " ++ msg
     hdl e = throwIO e
 

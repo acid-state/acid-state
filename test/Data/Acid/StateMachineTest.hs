@@ -41,8 +41,8 @@ module Data.Acid.StateMachineTest
 
 import           Control.DeepSeq
 import           Control.Exception (Exception, IOException, throw, catch, try, evaluate)
-import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad.IO.Class ( MonadIO(..) )
+import           Control.Monad.State    ( State, evalState, execState )
 import qualified Data.Acid as Acid
 import qualified Data.Acid.Common as Common
 import qualified Data.Acid.Core as Core

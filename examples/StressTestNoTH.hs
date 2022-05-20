@@ -7,8 +7,9 @@ module StressTestNoTH (main) where
 import           Data.Acid
 import           Data.Acid.Advanced
 
-import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad
+import           Control.Monad.Reader (ask)
+import           Control.Monad.State  (get, put)
 import           Data.SafeCopy
 import           System.Environment
 import           System.IO

@@ -1,6 +1,6 @@
 module RemoteClient (main) where
 
-import           Control.Monad.Reader
+import           Control.Monad
 import           Data.Acid
 import           Data.Acid.Advanced
 import           Data.Acid.Remote
