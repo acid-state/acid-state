@@ -10,8 +10,9 @@ module Data.Acid.KeyValueStateMachine (tests) where
 
 import           Control.DeepSeq
 import           Control.Exception
-import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad.IO.Class ( MonadIO(..) )
+import           Control.Monad.Reader   ( ask )
+import           Control.Monad.State    ( get, put )
 import           Data.Acid
 import           Data.Acid.StateMachineTest
 import           Data.SafeCopy

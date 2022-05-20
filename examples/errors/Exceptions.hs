@@ -7,7 +7,8 @@ module Exceptions (main, test) where
 import           Data.Acid
 import           Data.Acid.Local     (createCheckpointAndClose)
 
-import           Control.Monad.State
+import           Control.Monad
+import           Control.Monad.State ( get, put )
 import           Data.SafeCopy
 import           System.Directory
 import           System.Environment

@@ -10,8 +10,9 @@ module SlowCheckpoint (main) where
 import           Data.Acid
 
 import           Control.Concurrent
-import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad
+import           Control.Monad.Reader  (ask)
+import           Control.Monad.State   (get, put)
 import           Data.SafeCopy
 import           Data.Time
 import           System.Directory

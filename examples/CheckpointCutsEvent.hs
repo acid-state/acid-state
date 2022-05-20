@@ -22,8 +22,8 @@ module CheckpointCutsEvent (main) where
 
 -- import           Control.Concurrent
 import           Control.Applicative
-import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad
+import           Control.Monad.State  ( get, put )
 import           Data.Acid
 import           Data.List
 import           Data.SafeCopy

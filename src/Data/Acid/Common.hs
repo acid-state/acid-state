@@ -13,8 +13,9 @@ module Data.Acid.Common where
 
 import Data.Acid.Core
 
-import Control.Monad.State
-import Control.Monad.Reader
+import Control.Monad
+import Control.Monad.State   (MonadState, get, State)
+import Control.Monad.Reader  (MonadReader, Reader, runReader)
 import Control.Applicative
 
 
