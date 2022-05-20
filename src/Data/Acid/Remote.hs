@@ -96,6 +96,9 @@ module Data.Acid.Remote
     ) where
 
 import Prelude                                hiding ( catch )
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative
+#endif
 import Control.Concurrent.STM                        ( atomically )
 import Control.Concurrent.STM.TMVar                  ( newEmptyTMVar, readTMVar, takeTMVar, tryTakeTMVar, putTMVar )
 import Control.Concurrent.STM.TQueue
@@ -110,7 +113,9 @@ import Control.Concurrent.Chan                       ( newChan, readChan, writeC
 import Data.Acid.Abstract
 import Data.Acid.Core
 import Data.Acid.Common
+#if !MIN_VERSION_base(4,11,0)
 import Data.Monoid                                   ((<>))
+#endif
 import qualified Data.ByteString                     as Strict
 import Data.ByteString.Char8                         ( pack )
 import qualified Data.ByteString.Lazy                as Lazy

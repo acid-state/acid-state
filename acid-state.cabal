@@ -84,7 +84,14 @@ Library
      Hs-Source-Dirs:   src-unix/
 
   default-language:    Haskell2010
-  GHC-Options:         -fwarn-unused-imports -fwarn-unused-binds
+  GHC-Options:         -Wall
+                       -fno-warn-dodgy-imports
+                       -fno-warn-missing-signatures
+                       -fno-warn-name-shadowing
+                       -fno-warn-unused-do-bind
+                       -fno-warn-unused-matches
+  if impl(ghc >= 8.0)
+    ghc-options:       -Wcompat
 
 executable acid-state-repair
   hs-source-dirs: repair
