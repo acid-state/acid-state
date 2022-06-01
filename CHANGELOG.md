@@ -1,8 +1,9 @@
 0.16.1.1
 ========
 
+- Adapt to changes in hedgehog-1.1 related to barbies
 - Support mtl-2.3
-- Tested with GHC 7.8 - 9.2
+- Tested with GHC 7.8 - 9.2.3
 
 0.16.1
 ======
