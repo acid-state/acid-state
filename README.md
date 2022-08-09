@@ -1,14 +1,19 @@
-acid-state [![Hackage](https://img.shields.io/hackage/v/acid-state.svg)](https://hackage.haskell.org/package/acid-state) [![Build Status](https://api.travis-ci.org/acid-state/acid-state.svg?branch=master)](https://travis-ci.org/acid-state/acid-state)
+acid-state [![Hackage version](https://img.shields.io/hackage/v/acid-state.svg?label=Hackage&color=informational)](http://hackage.haskell.org/package/acid-state) [![acid-state on Stackage Nightly](https://stackage.org/package/acid-state/badge/nightly)](https://stackage.org/nightly/package/acid-state) [![Stackage LTS version](https://www.stackage.org/package/acid-state/badge/lts?label=Stackage)](https://www.stackage.org/package/acid-state) [![Cabal build](https://github.com/acid-state/acid-state/workflows/Haskell-CI/badge.svg)](https://github.com/acid-state/acid-state/actions)
 ==========
+
 Unplug your machine, restart and have your app recover to exactly where it left off. Acid-State spares you the need to deal with all the marshalling, consistency, and configuration headache that you would have if you used an external DBMS for this purpose.
 
 How does it work?
 ===========
 Acid-state does not write your data types to disk every time you change it. It instead keeps a history of all the functions (along with their arguments) that have modified the state. Thus, recreating the state after an unforeseen error is a simple as rerunning the functions in the history log.
 
-Keep in mind that acid-state does not provide schema migrations. If you plan on changing the definition of your data-type during the lifetime if your application (you most likely do), you can either use a fixed schema such as `XML` or `JSON`, or you can use An [example](http://github.com/acid-state/safecopy "safecopy"). As of version 0.4, `safecopy` is the default serialization path but using XML or JSON is still a possibility.
-
-If you have any questions or comments, feel free to mail me at <lemmih@gmail.com> or find me (Lemmih) at irc.freenode.org#haskell.
+Keep in mind that acid-state does not provide schema migrations.
+If you plan on changing the definition of your data-type
+during the lifetime of your application (you most likely do),
+you can either use a fixed schema such as `XML` or `JSON`,
+or you can use [`safecopy`](https://github.com/acid-state/safecopy "safecopy").
+As of version 0.4, `safecopy` is the default serialization path
+but using `XML` or `JSON` is still a possibility.
 
 FAQ
 ============
@@ -45,5 +50,5 @@ Robustness
 ================
   - How do I recover a corrupted acid-state database?
     - acid-state provides an `acid-state-repair` tool. Build it with `stack build` in the root of this repository, you can then call `acid-state-repair` from a directory holding a corrupted database to repair it. In most case it should only drop the last entry, presumably a partial write because of a crash, but if the base is heavily corrupted, it may restore the database to an older state. Your database is always saved in `.bak` files, so that the repair operation is reversible.
-  - How well does acid-state deal with errors? 
+  - How well does acid-state deal with errors?
     - List of Error Scenarios.
