@@ -1,5 +1,6 @@
 Name:                acid-state
 Version:             0.16.1.1
+x-revision:          1
 Synopsis:            Add ACID guarantees to any serializable Haskell data structure.
 Description:         Use regular Haskell data structures as your database and get stronger ACID guarantees than most RDBMS offer.
 Homepage:            https://github.com/acid-state/acid-state
@@ -195,7 +196,7 @@ benchmark loading-benchmark
     system-fileio == 0.3.*,
     system-filepath,
     -- perRunEnv was added in criterion-1.2.0.0
-    criterion >= 1.2.0.0 && < 1.6,
+    criterion >= 1.2.0.0 && < 1.7,
     mtl,
     base,
     acid-state
