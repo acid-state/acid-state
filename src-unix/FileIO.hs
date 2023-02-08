@@ -1,5 +1,8 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
+
 module FileIO(FHandle,open,write,flush,close) where
+
 import System.Posix(Fd(Fd),
                     openFd,
                     fdWriteBuf,
@@ -16,7 +19,11 @@ data FHandle = FHandle Fd
 
 -- should handle opening flags correctly
 open :: FilePath -> IO FHandle
+#if !MIN_VERSION_unix(2,8,0)
 open filename = fmap FHandle $ openFd filename WriteOnly (Just stdFileMode) defaultFileFlags
+#else
+open filename = fmap FHandle $ openFd filename WriteOnly defaultFileFlags
+#endif
 
 write :: FHandle -> Ptr Word8 -> Word32 -> IO Word32
 write (FHandle fd) data' length = fmap fromIntegral $ fdWriteBuf fd data' $ fromIntegral length

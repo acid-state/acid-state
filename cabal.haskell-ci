@@ -1,5 +1,5 @@
 branches: master ci*
 
-constraint-set mtl-2.3
+constraint-set mtl-2.3-unix-2.8
   ghc: >= 8.6
-  constraints: mtl >= 2.3, transformers >= 0.6
+  constraints: mtl >= 2.3, transformers >= 0.6, unix >= 2.8
