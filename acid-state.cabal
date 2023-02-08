@@ -138,6 +138,7 @@ test-suite state-machine
   other-modules:       Data.Acid.KeyValueStateMachine
                        Data.Acid.StateMachineTest
   default-language:    Haskell2010
+  default-extensions:  TypeOperators
 
   if flag(skip-state-machine-test)
     buildable: False
@@ -204,25 +205,26 @@ benchmark loading-benchmark
   default-language:
     Haskell2010
   default-extensions:
-    PatternGuards
-    GADTs
-    StandaloneDeriving
-    MultiParamTypeClasses
-    ScopedTypeVariables
+    -- keep this list alphabetically sorted!
+    ConstraintKinds
+    DataKinds
+    DefaultSignatures
+    DeriveDataTypeable
+    EmptyDataDecls
+    FlexibleContexts
     FlexibleInstances
+    GADTs
+    MultiParamTypeClasses
+    NoImplicitPrelude
+    NoMonomorphismRestriction
+    OverloadedStrings
+    PatternGuards
+    RankNTypes
+    ScopedTypeVariables
+    StandaloneDeriving
+    TemplateHaskell
+    TupleSections
     TypeFamilies
     TypeOperators
-    FlexibleContexts
-    NoImplicitPrelude
-    EmptyDataDecls
-    DataKinds
-    NoMonomorphismRestriction
-    RankNTypes
-    ConstraintKinds
-    DefaultSignatures
-    TupleSections
-    TemplateHaskell
-    OverloadedStrings
-    DeriveDataTypeable
   ghc-options:
     -O2
