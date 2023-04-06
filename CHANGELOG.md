@@ -1,11 +1,15 @@
 0.16.1.2
 ========
 
+_Andreas Abel, 2023-04-06_
+
 - Support unix-2.8
-- Tested with GHC 7.8 - 9.6.0
+- Tested with GHC 7.8 - 9.6.1
 
 0.16.1.1
 ========
+
+_Andreas Abel, 2022-06-01_
 
 - Adapt to changes in hedgehog-1.1 related to barbies
 - Support mtl-2.3
@@ -14,10 +18,19 @@
 0.16.1
 ======
 
+_David Fox, 2022-02-18_
+
  - Support GHC-9.0.2, template-haskell 2.18
+
+0.16.0.1
+========
+
+_Jeremy Shaw, 2020-05-19_
 
 0.16.0
 ======
+
+_Jeremy Shaw, 2019-11-14_
 
  - support network-3.x and ghc-8.8.1
  - Fix tests
