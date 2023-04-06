@@ -1,3 +1,6 @@
-dist/**
+/dist/
+/dist-newstyle/
+/.stack-work/
+/state/
+.ghc.environment.*
 *.swp
-dist-newstyle/**
