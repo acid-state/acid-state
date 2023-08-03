@@ -88,20 +88,36 @@ makeAcidicWithSerialiser ss stateName eventNames
          case stateInfo of
            TyConI tycon
              ->case tycon of
+
 #if MIN_VERSION_template_haskell(2,11,0)
                  DataD _cxt _name tyvars _kind constructors _derivs
 #else
                  DataD _cxt _name tyvars constructors _derivs
 #endif
+#if MIN_VERSION_template_haskell(2,21,0)
+                   -> makeAcidic' ss eventNames stateName (map void tyvars) constructors
+#else
                    -> makeAcidic' ss eventNames stateName tyvars constructors
+#endif
+
 #if MIN_VERSION_template_haskell(2,11,0)
                  NewtypeD _cxt _name tyvars _kind constructor _derivs
 #else
                  NewtypeD _cxt _name tyvars constructor _derivs
 #endif
+#if MIN_VERSION_template_haskell(2,21,0)
+                   -> makeAcidic' ss eventNames stateName (map void tyvars) [constructor]
+#else
                    -> makeAcidic' ss eventNames stateName tyvars [constructor]
+#endif
+
                  TySynD _name tyvars _ty
+#if MIN_VERSION_template_haskell(2,21,0)
+                   -> makeAcidic' ss eventNames stateName (map void tyvars) []
+#else
                    -> makeAcidic' ss eventNames stateName tyvars []
+#endif
+
                  _ -> error "Data.Acid.TemplateHaskell: Unsupported state type. Only 'data', 'newtype' and 'type' are supported."
            _ -> error "Data.Acid.TemplateHaskell: Given state is not a type."
 
@@ -325,7 +341,10 @@ makeEventDataType eventName eventType
              cxt = [''Typeable]
 #endif
          case args of
-#if MIN_VERSION_template_haskell(2,11,0)
+#if MIN_VERSION_template_haskell(2,21,0)
+          [_] -> newtypeD (return []) eventStructName (map (BndrReq <$) tyvars) Nothing con cxt
+          _   -> dataD (return []) eventStructName (map (BndrReq <$) tyvars) Nothing [con] cxt
+#elif MIN_VERSION_template_haskell(2,11,0)
           [_] -> newtypeD (return []) eventStructName tyvars Nothing con cxt
           _   -> dataD (return []) eventStructName tyvars Nothing [con] cxt
 #else
