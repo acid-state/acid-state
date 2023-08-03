@@ -1,3 +1,12 @@
+0.16.1.3
+========
+
+_Andreas Abel, 2023-08-03_
+
+- Support template-haskell-2.21
+  ([#162](https://github.com/acid-state/acid-state/pull/162))
+- Tested with GHC 7.8 - 9.8.1-alpha1
+
 0.16.1.2
 ========
 
