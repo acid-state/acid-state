@@ -12,8 +12,9 @@ Build-type:          Simple
 Cabal-version:       >=1.10
 
 tested-with:
-  GHC == 9.6.2
-  GHC == 9.4.5
+  GHC == 9.8.1
+  GHC == 9.6.3
+  GHC == 9.4.7
   GHC == 9.2.8
   GHC == 9.0.2
   GHC == 8.10.7
@@ -23,7 +24,6 @@ tested-with:
   GHC == 8.2.2
   GHC == 8.0.2
   GHC == 7.10.3
-  GHC == 7.8.4
 
 Extra-source-files:
         CHANGELOG.md
