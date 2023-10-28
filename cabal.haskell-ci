@@ -1,7 +1,7 @@
 branches: master
 
--- Benchmarks use the outdated system-filepath
-benchmarks: < 9.8
+-- -- Benchmarks use the outdated system-filepath
+-- benchmarks: < 9.8
 
 -- constraint-set mtl-2.3-unix-2.8
 --   ghc: >= 8.6
