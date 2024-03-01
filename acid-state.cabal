@@ -95,6 +95,9 @@ Library
                        -fno-warn-unused-matches
   if impl(ghc >= 8.0)
     ghc-options:       -Wcompat
+  if impl(ghc < 8.0)
+    Hs-Source-Dirs:    src-7.10
+    Other-modules:     GHC.Stack
 
 executable acid-state-repair
   hs-source-dirs: repair
