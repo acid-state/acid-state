@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, GADTs, DeriveDataTypeable, TypeFamilies,
-             FlexibleContexts, BangPatterns,
+             FlexibleContexts, BangPatterns, MultiParamTypeClasses,
              DefaultSignatures, ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 -- |
@@ -44,6 +44,9 @@ module Data.Acid.Core
     , decodeMethod
     , encodeResult
     , decodeResult
+#if !MIN_VERSION_base(4,9,0)
+    , HasCallStack
+#endif
     ) where
 
 import Control.Concurrent                 ( MVar, newMVar, withMVar
@@ -69,7 +72,12 @@ import Data.Typeable                      ( tyConModule )
 import Data.Typeable.Internal             ( tyConModule )
 #endif
 
+#if MIN_VERSION_base(4,9,0)
 import GHC.Stack                          ( HasCallStack )
+#else
+class HasCallStack
+instance HasCallStack
+#endif
 
 #if MIN_VERSION_base(4,4,0)
 

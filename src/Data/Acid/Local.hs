@@ -52,11 +52,13 @@ import Data.SafeCopy                  ( SafeCopy(..), safeGet, safePut
                                       , primitive, contain )
 import Data.Typeable                  ( Typeable, typeOf )
 import Data.IORef
-import GHC.Stack                      ( HasCallStack )
 import System.FilePath                ( (</>), takeDirectory )
 import System.FileLock
 import System.Directory               ( createDirectoryIfMissing )
 
+#if MIN_VERSION_base(4,9,0)
+import GHC.Stack                      ( HasCallStack )
+#endif
 
 {-| State container offering full ACID (Atomicity, Consistency, Isolation and Durability)
     guarantees.
