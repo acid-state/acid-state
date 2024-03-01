@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, GADTs, DeriveDataTypeable, TypeFamilies,
-             FlexibleContexts, BangPatterns, TypeApplications,
+             FlexibleContexts, BangPatterns,
              DefaultSignatures, ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 -- |
@@ -182,7 +182,7 @@ closeCore' core action
     = modifyMVar_ (coreState core) $ \st ->
       do action st
          return errorMsg
-    where errorMsg = error ("Data.Acid.Core: Access failure: Core closed. (" <> show (typeRep (Proxy @st)) <> ")")
+    where errorMsg = error ("Data.Acid.Core: Access failure: Core closed. (" <> show (typeRep (Proxy :: Proxy st)) <> ")")
 
 -- | Modify the state component. The resulting state is ensured to be in
 --   WHNF.
