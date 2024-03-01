@@ -56,6 +56,9 @@ import System.FilePath                ( (</>), takeDirectory )
 import System.FileLock
 import System.Directory               ( createDirectoryIfMissing )
 
+#if MIN_VERSION_base(4,9,0)
+import GHC.Stack                      ( HasCallStack )
+#endif
 
 {-| State container offering full ACID (Atomicity, Consistency, Isolation and Durability)
     guarantees.
@@ -189,7 +192,7 @@ localQueryCold acidState event
 --   with this call.
 --
 --   This call will not return until the operation has succeeded.
-createLocalCheckpoint :: IsAcidic st => LocalState st -> IO ()
+createLocalCheckpoint :: HasCallStack => IsAcidic st => LocalState st -> IO ()
 createLocalCheckpoint acidState
     = do cutFileLog (localEvents acidState)
          mvar <- newEmptyMVar
@@ -202,7 +205,7 @@ createLocalCheckpoint acidState
 -- | Save a snapshot to disk and close the AcidState as a single atomic
 --   action. This is useful when you want to make sure that no events
 --   are saved to disk after a checkpoint.
-createCheckpointAndClose :: (IsAcidic st, Typeable st) => AcidState st -> IO ()
+createCheckpointAndClose :: (IsAcidic st, Typeable st, HasCallStack) => AcidState st -> IO ()
 createCheckpointAndClose abstract_state
     = do mvar <- newEmptyMVar
          closeCore' (localCore acidState) $ \st ->
@@ -250,7 +253,7 @@ instance SafeCopy s => SafeCopy (Checkpoint s) where
 -- | Create an AcidState given an initial value.
 --
 --   This will create or resume a log found in the \"state\/[typeOf state]\/\" directory.
-openLocalState :: (Typeable st, IsAcidic st, SafeCopy st)
+openLocalState :: (Typeable st, IsAcidic st, SafeCopy st, HasCallStack)
               => st                          -- ^ Initial state value. This value is only used if no checkpoint is
                                              --   found.
               -> IO (AcidState st)
@@ -279,7 +282,7 @@ defaultStateDirectory initialState = "state" </> show (typeOf initialState)
 --   This will create or resume a log found in @directory@.
 --   Running two AcidState's from the same directory is an error
 --   but will not result in dataloss.
-openLocalStateFrom :: (IsAcidic st, SafeCopy st)
+openLocalStateFrom :: (IsAcidic st, SafeCopy st, HasCallStack)
                   => FilePath            -- ^ Location of the checkpoint and transaction files.
                   -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
                                          --   found.
@@ -292,7 +295,7 @@ openLocalStateFrom directory initialState =
 --   This will create or resume a log found in @directory@.
 --   Running two AcidState's from the same directory is an error
 --   but will not result in dataloss.
-openLocalStateWithSerialiser :: (IsAcidic st)
+openLocalStateWithSerialiser :: (IsAcidic st, HasCallStack)
                   => FilePath            -- ^ Location of the checkpoint and transaction files.
                   -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
                                          --   found.
@@ -306,7 +309,7 @@ openLocalStateWithSerialiser directory initialState serialisationLayer =
 --   This will create or resume a log found in @directory@.
 --   The most recent checkpoint will be loaded immediately but the AcidState will not be opened
 --   until the returned function is executed.
-prepareLocalStateFrom :: (IsAcidic st, SafeCopy st)
+prepareLocalStateFrom :: (IsAcidic st, SafeCopy st, HasCallStack)
                   => FilePath            -- ^ Location of the checkpoint and transaction files.
                   -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
                                          --   found.
@@ -319,7 +322,7 @@ prepareLocalStateFrom directory initialState =
 --   This will create or resume a log found in @directory@.
 --   The most recent checkpoint will be loaded immediately but the AcidState will not be opened
 --   until the returned function is executed.
-prepareLocalStateWithSerialiser :: (IsAcidic st)
+prepareLocalStateWithSerialiser :: (IsAcidic st, HasCallStack)
                   => FilePath            -- ^ Location of the checkpoint and transaction files.
                   -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
                                          --   found.
@@ -369,7 +372,7 @@ mkCheckpointsLogKey directory serialisationLayer =
          , logSerialiser = checkpointSerialiser serialisationLayer
          , logArchiver = archiver serialisationLayer }
 
-resumeLocalStateFrom :: (IsAcidic st)
+resumeLocalStateFrom :: (IsAcidic st, HasCallStack)
                   => FilePath            -- ^ Location of the checkpoint and transaction files.
                   -> st                  -- ^ Initial state value. This value is only used if no checkpoint is
                                          --   found.
@@ -430,14 +433,14 @@ checkpointRestoreError msg
 
 -- | Close an AcidState and associated logs.
 --   Any subsequent usage of the AcidState will throw an exception.
-closeLocalState :: LocalState st -> IO ()
+closeLocalState :: HasCallStack => LocalState st -> IO ()
 closeLocalState acidState
     = do closeCore (localCore acidState)
          closeFileLog (localEvents acidState)
          closeFileLog (localCheckpoints acidState)
          unlockFile (localLock acidState)
 
-createLocalArchive :: LocalState st -> IO ()
+createLocalArchive :: HasCallStack => LocalState st -> IO ()
 createLocalArchive state
   = do -- We need to look at the last checkpoint saved to disk. Since checkpoints can be written
        -- in parallel with this call, we can't guarantee that the checkpoint we get really is the
