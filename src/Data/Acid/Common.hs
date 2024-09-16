@@ -20,9 +20,10 @@ import Control.Monad.Reader  (MonadReader, Reader, runReader)
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative
 #endif
+import Data.Typeable (Typeable)
 
 
-class IsAcidic st where
+class Typeable st => IsAcidic st where
     acidEvents :: [Event st]
       -- ^ List of events capable of updating or querying the state.
 
