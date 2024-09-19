@@ -1,7 +1,7 @@
 branches: master
 
--- Benchmarks use the outdated system-filepath which mysteriously fails the build plan.
-benchmarks: < 9.10
+-- -- Benchmarks use the outdated system-filepath which mysteriously fails the build plan.
+-- benchmarks: < 9.10
 
 -- This actually makes things worse for GHC 8.6 and below:
 -- -- Prevent bad build plan with ancient system-filepath
