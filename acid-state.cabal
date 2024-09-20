@@ -24,7 +24,9 @@ tested-with:
   GHC == 8.6.5
   GHC == 8.4.4
   GHC == 8.2.2
-  GHC == 8.0.2
+  -- cabal-3.12 cannot install dependency system-filepath any more in the GHC 8.0 environment
+  -- https://github.com/haskell/cabal/issues/10379
+  -- GHC == 8.0.2
 
 Extra-source-files:
         CHANGELOG.md
