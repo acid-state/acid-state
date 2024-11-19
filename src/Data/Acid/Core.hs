@@ -57,10 +57,11 @@ import Data.Monoid                        ((<>))
 import Data.ByteString.Lazy as Lazy       ( ByteString )
 import Data.ByteString.Lazy.Char8 as Lazy ( pack, unpack )
 
+import Data.Proxy                         ( Proxy(Proxy) )
 import Data.Serialize                     ( runPutLazy, runGetLazy )
 import Data.SafeCopy                      ( SafeCopy, safeGet, safePut )
 
-import Data.Typeable                      ( Typeable, TypeRep, typeRepTyCon, typeOf )
+import Data.Typeable                      ( Typeable, TypeRep, typeRepTyCon, typeOf, typeRep )
 import Unsafe.Coerce                      ( unsafeCoerce )
 
 #if MIN_VERSION_base(4,5,0)
@@ -170,18 +171,18 @@ mkCore methods initialValue
                     , coreMethods = mkMethodMap methods }
 
 -- | Mark Core as closed. Any subsequent use will throw an exception.
-closeCore :: Core st -> IO ()
+closeCore :: Typeable st => Core st -> IO ()
 closeCore core
     = closeCore' core (\_st -> return ())
 
 -- | Access the state and then mark the Core as closed. Any subsequent use
 --   will throw an exception.
-closeCore' :: Core st -> (st -> IO ()) -> IO ()
+closeCore' :: forall st. (Typeable st) => Core st -> (st -> IO ()) -> IO ()
 closeCore' core action
     = modifyMVar_ (coreState core) $ \st ->
       do action st
          return errorMsg
-    where errorMsg = error "Data.Acid.Core: Access failure: Core closed."
+    where errorMsg = error ("Data.Acid.Core: Access failure: Core closed. (" <> show (typeRep (Proxy :: Proxy st)) <> ")")
 
 -- | Modify the state component. The resulting state is ensured to be in
 --   WHNF.
