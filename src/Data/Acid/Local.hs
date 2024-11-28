@@ -202,8 +202,8 @@ createLocalCheckpoint acidState
 -- | Save a snapshot to disk and close the AcidState as a single atomic
 --   action. This is useful when you want to make sure that no events
 --   are saved to disk after a checkpoint.
-createCheckpointAndClose :: (IsAcidic st, Typeable st) => AcidState st -> IO ()
-createCheckpointAndClose abstract_state
+createLocalCheckpointAndClose :: IsAcidic st => LocalState st -> IO ()
+createLocalCheckpointAndClose acidState
     = do mvar <- newEmptyMVar
          closeCore' (localCore acidState) $ \st ->
            do eventId <- askCurrentEntryId (localEvents acidState)
@@ -213,7 +213,6 @@ createCheckpointAndClose abstract_state
          closeFileLog (localEvents acidState)
          closeFileLog (localCheckpoints acidState)
          unlockFile (localLock acidState)
-  where acidState = downcast abstract_state
 
 
 data Checkpoint s = Checkpoint EntryId s
@@ -464,7 +463,7 @@ toAcidState local
               , _query = localQuery local
               , queryCold = localQueryCold local
               , createCheckpoint = createLocalCheckpoint local
+              , createCheckpointAndClose = createLocalCheckpointAndClose local
               , createArchive = createLocalArchive local
               , closeAcidState = closeLocalState local
-              , acidSubState = mkAnyState local
               }
