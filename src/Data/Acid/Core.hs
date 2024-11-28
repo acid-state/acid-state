@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, GADTs, DeriveDataTypeable, TypeFamilies,
-             FlexibleContexts, BangPatterns,
+             FlexibleContexts, BangPatterns, MultiParamTypeClasses,
              DefaultSignatures, ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 -- |
@@ -44,6 +44,9 @@ module Data.Acid.Core
     , decodeMethod
     , encodeResult
     , decodeResult
+#if !MIN_VERSION_base(4,9,0)
+    , HasCallStack
+#endif
     ) where
 
 import Control.Concurrent                 ( MVar, newMVar, withMVar
@@ -67,6 +70,13 @@ import Unsafe.Coerce                      ( unsafeCoerce )
 import Data.Typeable                      ( tyConModule )
 #else
 import Data.Typeable.Internal             ( tyConModule )
+#endif
+
+#if MIN_VERSION_base(4,9,0)
+import GHC.Stack                          ( HasCallStack )
+#else
+class HasCallStack
+instance HasCallStack
 #endif
 
 #if MIN_VERSION_base(4,4,0)
@@ -170,13 +180,13 @@ mkCore methods initialValue
                     , coreMethods = mkMethodMap methods }
 
 -- | Mark Core as closed. Any subsequent use will throw an exception.
-closeCore :: Core st -> IO ()
+closeCore :: HasCallStack => Core st -> IO ()
 closeCore core
     = closeCore' core (\_st -> return ())
 
 -- | Access the state and then mark the Core as closed. Any subsequent use
 --   will throw an exception.
-closeCore' :: Core st -> (st -> IO ()) -> IO ()
+closeCore' :: HasCallStack => Core st -> (st -> IO ()) -> IO ()
 closeCore' core action
     = modifyMVar_ (coreState core) $ \st ->
       do action st
@@ -185,7 +195,7 @@ closeCore' core action
 
 -- | Modify the state component. The resulting state is ensured to be in
 --   WHNF.
-modifyCoreState :: Core st -> (st -> IO (st, a)) -> IO a
+modifyCoreState :: HasCallStack => Core st -> (st -> IO (st, a)) -> IO a
 modifyCoreState core action
     = modifyMVar (coreState core) $ \st -> do (!st', a) <- action st
                                               return (st', a)
