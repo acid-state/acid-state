@@ -332,7 +332,7 @@ makeEventHandler ss eventName eventType
 --  deriving (Typeable)
 makeEventDataType :: Name -> Type -> DecQ
 makeEventDataType eventName eventType
-    = do let con = normalC eventStructName [ strictType notStrict (return arg) | arg <- args ]
+    = do let con = normalC eventStructName [ bangType (bang noSourceUnpackedness noSourceStrictness) (return arg) | arg <- args ]
 #if MIN_VERSION_template_haskell(2,12,0)
              cxt = [derivClause Nothing [conT ''Typeable]]
 #elif MIN_VERSION_template_haskell(2,11,0)
@@ -380,10 +380,12 @@ makeSafeCopyInstance eventName eventType
     where TypeAnalysis { tyvars, context, argumentTypes = args } = analyseType eventName eventType
           eventStructName = toStructName eventName
 
+mkCxtFromTyVars :: Quote m => [Name] -> [TyVarBndr a] -> [Pred] -> m Cxt
 mkCxtFromTyVars preds tyvars extraContext
-    = cxt $ [ classP classPred [varT tyvar] | tyvar <- allTyVarBndrNames tyvars, classPred <- preds ] ++
-            map return extraContext
-
+    = cxt $ [ foldl appT (conT classPred) [varT tyvar] 
+            | tyvar <- allTyVarBndrNames tyvars, classPred <- preds 
+            ] ++ map return extraContext
+      
 {-
 instance (Typeable key, Typeable val) => Method (MyUpdateEvent key val) where
   type MethodResult (MyUpdateEvent key val) = Return
@@ -398,12 +400,12 @@ makeMethodInstance eventName eventType = do
         structType =
             foldl appT (conT eventStructName) (map varT (allTyVarBndrNames tyvars))
         instanceContext  =
-            cxt $
-                [ classP classPred [varT tyvar]
-                | tyvar <- allTyVarBndrNames tyvars
-                , classPred <- preds
-                ]
-                ++ map return context
+               cxt $
+                   [ foldl appT (conT classPred) [varT tyvar]
+                   | tyvar <- allTyVarBndrNames tyvars
+                   , classPred <- preds
+                   ]
+                   ++ map return context
     instanceD
         instanceContext
         (return ty)
@@ -427,7 +429,10 @@ makeEventInstance eventName eventType
     = do let preds = [ ''Typeable ]
              eventClass = if isUpdate then ''UpdateEvent else ''QueryEvent
              ty = AppT (ConT eventClass) (foldl AppT (ConT eventStructName) (map VarT (allTyVarBndrNames tyvars)))
-         instanceD (cxt $ [ classP classPred [varT tyvar] | tyvar <- allTyVarBndrNames tyvars, classPred <- preds ] ++ map return context)
+         instanceD (cxt $ [ foldl appT (conT classPred) [varT tyvar] 
+                          | tyvar <- allTyVarBndrNames tyvars
+                          , classPred <- preds ] 
+                          ++ map return context)
                    (return ty)
                    []
     where TypeAnalysis { tyvars, context, isUpdate } = analyseType eventName eventType

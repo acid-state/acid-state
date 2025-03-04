@@ -125,20 +125,18 @@ keyValueCommands = [ acidUpdate        (InsertKey        <$> genKey <*> genValue
                    , acidQueryMayFail  (LookupKeyOrFail  <$> genKey <*> genBomb)
                    ]
 
--- | Possible initial states; because of #20 we can currently only use
--- one of these when testing the properties.
-initialStates :: [KeyValue]
-initialStates = [ KeyValue Map.empty
-                , KeyValue (Map.singleton 1 "foo")
-                ]
-
-prop_sequential :: Property
-prop_sequential = acidStateSequentialProperty (acidStateInterface fp) (pure (head initialStates)) (Range.linear 1 10) keyValueCommands
+prop_empty :: Property
+prop_empty = acidStateSequentialProperty (acidStateInterface fp) (pure (KeyValue Map.empty)) (Range.linear 1 10) keyValueCommands
   where
-    fp = "state/KeyValueSequentialTest"
-
+    fp = "state/KeyValueEmptyTest"
+  
+prop_singleton :: Property
+prop_singleton = acidStateSequentialProperty (acidStateInterface fp) (pure (KeyValue (Map.singleton 1 "foo"))) (Range.linear 1 10) keyValueCommands
+  where
+    fp = "state/KeyValueSingletonTest"
+  
 prop_parallel :: Property
-prop_parallel = acidStateParallelProperty (acidStateInterface fp) (pure (head initialStates)) (Range.linear 1 10) (Range.linear 1 10) keyValueCommands
+prop_parallel = acidStateParallelProperty (acidStateInterface fp) (pure (KeyValue Map.empty)) (Range.linear 1 10) (Range.linear 1 10) keyValueCommands
   where
     fp = "state/KeyValueParallelTest"
 

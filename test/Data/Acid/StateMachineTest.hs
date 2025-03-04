@@ -47,6 +47,7 @@ import qualified Data.Acid as Acid
 import qualified Data.Acid.Common as Common
 import qualified Data.Acid.Core as Core
 import qualified Data.Acid.Local as Local
+import           Data.Kind
 import           Data.Maybe
 import qualified Data.SafeCopy as SafeCopy
 import           Data.Typeable
@@ -119,7 +120,7 @@ $(SafeCopy.deriveSafeCopy 0 'SafeCopy.base ''Bomb)
 -- can transition between 'StateOpen' and 'StateClosed' by opening and
 -- closing the state.  Both of the latter keep track of the current
 -- value of the state.
-data Model s (v :: * -> *)
+data Model s (v :: Type -> Type)
     = StateAbsent    -- ^ State is not present on disk
     | StateClosed s  -- ^ State is present on disk, but not in memory
     | StateOpen   s (Var (Opaque (Acid.AcidState s)) v) -- ^ State is open in memory
@@ -175,7 +176,7 @@ acidStateInterface fp =
                        }
 
 
-data Open s (v :: * -> *) = Open s
+data Open s (v :: Type -> Type) = Open s
   deriving Show
 
 #if MIN_VERSION_hedgehog(1,1,0)
@@ -207,7 +208,7 @@ open AcidStateInterface{..} gen_initial_state =
     update StateOpen{}     _        _   = error "open: state already open!"
 
 
-data WithState s (v :: * -> *) = WithState String (Var (Opaque (Acid.AcidState s)) v)
+data WithState s (v :: Type -> Type) = WithState String (Var (Opaque (Acid.AcidState s)) v)
   deriving (Show)
 
 #if MIN_VERSION_hedgehog(1,1,0)
@@ -268,7 +269,7 @@ kill AcidStateInterface{..} =
 
 
 
-data AcidCommand s e (v :: * -> *) = AcidCommand e (Var (Opaque (Acid.AcidState s)) v)
+data AcidCommand s e (v :: Type -> Type) = AcidCommand e (Var (Opaque (Acid.AcidState s)) v)
   deriving (Show)
 
 #if MIN_VERSION_hedgehog(1,1,0)

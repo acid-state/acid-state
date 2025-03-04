@@ -14,7 +14,6 @@ module Data.Acid.Common where
 
 import Data.Acid.Core
 
-import Control.Monad
 import Control.Monad.State   (MonadState, get, State)
 import Control.Monad.Reader  (MonadReader, Reader, runReader)
 #if !MIN_VERSION_base(4,8,0)
@@ -26,24 +25,13 @@ class IsAcidic st where
     acidEvents :: [Event st]
       -- ^ List of events capable of updating or querying the state.
 
-
 -- | Context monad for Update events.
 newtype Update st a = Update { unUpdate :: State st a }
-    deriving (Monad, Functor, MonadState st)
-
--- mtl pre-2.0 doesn't have these instances to newtype-derive, but they're
--- simple enough.
-instance Applicative (Update st) where
-    pure = return
-    (<*>) = ap
+   deriving (Monad, Functor, Applicative, MonadState st)
 
 -- | Context monad for Query events.
 newtype Query st a  = Query { unQuery :: Reader st a }
-    deriving (Monad, Functor, MonadReader st)
-
-instance Applicative (Query st) where
-    pure = return
-    (<*>) = ap
+    deriving (Monad, Functor, Applicative, MonadReader st)
 
 -- | Run a query in the Update Monad.
 liftQuery :: Query st a -> Update st a

@@ -21,7 +21,6 @@ import           Data.Acid.CRC
 import qualified Data.ByteString        as Strict
 import qualified Data.ByteString.Lazy   as Lazy
 import           Data.ByteString.Builder
-import           Data.Monoid
 import           Data.Serialize.Get     hiding (Result (..))
 import qualified Data.Serialize.Get     as Serialize
 

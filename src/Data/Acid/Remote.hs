@@ -124,7 +124,7 @@ import Data.Serialize
 import Data.Set                                      ( Set, member )
 import Data.Typeable                                 ( Typeable )
 import GHC.IO.Exception                              ( IOErrorType(..) )
-import Network.BSD                                   ( PortNumber, getProtocolNumber, getHostByName, hostAddress )
+import Network.BSD                                   ( getProtocolNumber, getHostByName, hostAddress )
 import Network.Socket
 import Network.Socket.ByteString                     as NSB ( recv, sendAll )
 import System.Directory                              ( removeFile )
