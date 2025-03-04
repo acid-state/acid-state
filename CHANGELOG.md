@@ -1,4 +1,11 @@
 0.16.1.3
+========4
+_Henry Laxen, 2025-03-04_
+
+- Fixed code to remove all warnings
+- Tested with GHC 9.10.1
+
+0.16.1.3
 ========
 
 _Andreas Abel, 2023-08-03_
