@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, TypeFamilies, GADTs, CPP #-}
+{-# LANGUAGE RankNTypes, TypeFamilies, GADTs, CPP, TypeOperators #-}
 module Data.Acid.Abstract
     ( AcidState(..)
     , scheduleUpdate
@@ -12,9 +12,10 @@ module Data.Acid.Abstract
     ) where
 
 import Data.Acid.Common
+
 import Data.Acid.Core
 
-import Control.Concurrent      ( MVar, takeMVar )
+import Control.Concurrent      ( MVar, takeMVar ) 
 import Data.ByteString.Lazy    ( ByteString )
 import Control.Monad           ( void )
 import Control.Monad.Trans     ( MonadIO(liftIO) )
