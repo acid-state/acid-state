@@ -124,7 +124,7 @@ toAcidState memory
               , _query             = memoryQuery memory
               , queryCold          = memoryQueryCold memory
               , createCheckpoint   = createMemoryCheckpoint memory
+              , createCheckpointAndClose = createMemoryCheckpoint memory >> closeMemoryState memory
               , createArchive      = createMemoryArchive memory
               , closeAcidState     = closeMemoryState memory
-              , acidSubState       = mkAnyState memory
               }

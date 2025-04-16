@@ -19,6 +19,7 @@ module Data.Acid
     , openLocalStateFrom
     , closeAcidState
     , createCheckpoint
+    , createCheckpointAndClose
     , createArchive
     , update
     , query

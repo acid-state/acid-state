@@ -7,8 +7,6 @@ module Data.Acid.Abstract
     , update'
     , query
     , query'
-    , mkAnyState
-    , downcast
     ) where
 
 import Data.Acid.Common
@@ -18,18 +16,6 @@ import Control.Concurrent      ( MVar, takeMVar )
 import Data.ByteString.Lazy    ( ByteString )
 import Control.Monad           ( void )
 import Control.Monad.Trans     ( MonadIO(liftIO) )
-#if __GLASGOW_HASKELL__ >= 707
-import Data.Typeable           ( Typeable, gcast, typeOf )
-#else
-import Data.Typeable           ( Typeable1, gcast1, typeOf1 )
-#endif
-
-data AnyState st where
-#if __GLASGOW_HASKELL__ >= 707
-  AnyState :: Typeable sub_st => sub_st st -> AnyState st
-#else
-  AnyState :: Typeable1 sub_st => sub_st st -> AnyState st
-#endif
 
 -- Haddock doesn't get the types right on its own.
 {-| State container offering full ACID (Atomicity, Consistency, Isolation and Durability)
@@ -58,6 +44,16 @@ data AcidState st
 --
 --   This call will not return until the operation has succeeded.
                 createCheckpoint :: IO ()
+              ,
+-- | Save a snapshot to disk and close the AcidState as a single
+--   atomic action, if supported by the backend. This is useful when
+--   you want to make sure that no events are saved to disk after a
+--   checkpoint.
+--
+--   This is supported for the Local backend.  For the Remote and
+--   Memory backends, this is equivalent to calling 'createCheckpoint'
+--   followed by 'closeAcidState', without atomicity guarantees.
+                createCheckpointAndClose :: IO ()
 -- | Move all log files that are no longer necessary for state restoration into the 'Archive'
 --   folder in the state directory. This folder can then be backed up or thrown out as you see fit.
 --   Reverting to a state before the last checkpoint will not be possible if the 'Archive' folder
@@ -69,7 +65,6 @@ data AcidState st
 -- | Close an AcidState and associated resources.
 --   Any subsequent usage of the AcidState will throw an exception.
                 closeAcidState :: IO ()
-              , acidSubState :: AnyState st
               }
 
 -- | Issue an Update event and return immediately. The event is not durable
@@ -115,32 +110,3 @@ query acid = _query acid -- Redirection to make Haddock happy.
 -- | Same as 'query' but lifted into any monad capable of doing IO.
 query' :: (QueryEvent event, MonadIO m) => AcidState (EventState event) -> event -> m (EventResult event)
 query' acidState event = liftIO (query acidState event)
-
-#if __GLASGOW_HASKELL__ >= 707
-mkAnyState :: Typeable sub_st => sub_st st -> AnyState st
-#else
-mkAnyState :: Typeable1 sub_st => sub_st st -> AnyState st
-#endif
-mkAnyState = AnyState
-
-#if __GLASGOW_HASKELL__ >= 707
-downcast :: (Typeable sub, Typeable st) => AcidState st -> sub st
-downcast AcidState{acidSubState = AnyState sub}
-  = r
- where
-   r = case gcast (Just sub) of
-         Just (Just x) -> x
-         _ ->
-           error $
-            "Data.Acid.Abstract: Invalid subtype cast: " ++ show (typeOf sub) ++ " -> " ++ show (typeOf r)
-#else
-downcast :: Typeable1 sub => AcidState st -> sub st
-downcast AcidState{acidSubState = AnyState sub}
-  = r
- where
-   r = case gcast1 (Just sub) of
-         Just (Just x) -> x
-         _ ->
-           error $
-            "Data.Acid.Abstract: Invalid subtype cast: " ++ show (typeOf1 sub) ++ " -> " ++ show (typeOf1 r)
-#endif

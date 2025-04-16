@@ -612,9 +612,9 @@ toAcidState remote
               , _query             = remoteQuery remote mmap
               , queryCold          = remoteQueryCold remote
               , createCheckpoint   = createRemoteCheckpoint remote
+              , createCheckpointAndClose = createRemoteCheckpoint remote >> closeRemoteState remote
               , createArchive      = createRemoteArchive remote
               , closeAcidState     = closeRemoteState remote
-              , acidSubState       = mkAnyState remote
               }
   where
     mmap :: MethodMap st

@@ -46,7 +46,6 @@ import           Control.Monad.State    ( State, evalState, execState )
 import qualified Data.Acid as Acid
 import qualified Data.Acid.Common as Common
 import qualified Data.Acid.Core as Core
-import qualified Data.Acid.Local as Local
 import           Data.Maybe
 import qualified Data.SafeCopy as SafeCopy
 import           Data.Typeable
@@ -168,7 +167,7 @@ acidStateInterface fp =
     AcidStateInterface { openState            = Acid.openLocalStateFrom fp
                        , closeState           = Acid.closeAcidState
                        , checkpointState      = Acid.createCheckpoint
-                       , checkpointCloseState = Local.createCheckpointAndClose
+                       , checkpointCloseState = Acid.createCheckpointAndClose
                        , resetState           = removeDirectoryRecursive fp
                                                   `catch` (\ (_ :: IOException) -> return ())
                        , statePath            = fp
