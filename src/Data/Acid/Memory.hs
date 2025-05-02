@@ -113,7 +113,7 @@ createMemoryArchive acidState
 
 -- | Close an AcidState and associated logs.
 --   Any subsequent usage of the AcidState will throw an exception.
-closeMemoryState :: MemoryState st -> IO ()
+closeMemoryState :: Typeable st => MemoryState st -> IO ()
 closeMemoryState acidState
     = closeCore (localCore acidState)
 

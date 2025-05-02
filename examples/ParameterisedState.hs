@@ -37,7 +37,7 @@ instance (Ord k, Serialize k, SafeCopy k, Typeable k) => SafeCopy (Store k)
 instance (Ord k, Serialize k) => Serialize (Store k)
 
 insertStore
-    :: (Ord k, Serialize k)
+    :: (Ord k, Serialize k, Typeable k)
     => Entry k
     -> Update (Store k) k
 insertStore item = do
