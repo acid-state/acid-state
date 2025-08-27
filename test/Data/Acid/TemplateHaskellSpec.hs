@@ -104,15 +104,10 @@ spec = do
                 `shouldBe` TypeAnalysis
                     { tyvars = []
                     , context =
-#if MIN_VERSION_template_haskell(2,10,0)
                         [ ConT ''MonadReader
                             `AppT` ConT ''Int
                             `AppT` VarT m
                         ]
-#else
-                        [ ClassP ''MonadReader [ConT ''Int, VarT m]
-                        ]
-#endif
                     , argumentTypes = [ConT ''Int]
                     , stateType = ConT ''Int
                     , resultType = VarT m `AppT` TupleT 0
@@ -154,21 +149,13 @@ spec = do
 
             eventCxts stateType binders name eventType
                 `shouldBe`
-#if MIN_VERSION_template_haskell(2,10,0)
                     [ConT ''Ord `AppT` VarT x]
-#else
-                    [ClassP ''Ord [VarT x]]
-#endif
 
         it "can rename a polymorphic state" $ do
             eventType <- runQ [t| forall r m. (MonadReader r m, Ord r) => Int -> m Char |]
             eventCxts stateType binders name eventType
                 `shouldBe`
-#if MIN_VERSION_template_haskell(2,10,0)
                     [ConT ''Ord `AppT` ConT ''Char]
-#else
-                    [ClassP ''Ord [ConT ''Char]]
-#endif
 
 
 quoteShouldBe :: (Eq a, Show a) => Q a -> Q [a] -> Expectation

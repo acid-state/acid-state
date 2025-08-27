@@ -86,22 +86,14 @@ makeAcidicWithSerialiser ss stateName eventNames
            TyConI tycon
              ->case tycon of
 
-#if MIN_VERSION_template_haskell(2,11,0)
                  DataD _cxt _name tyvars _kind constructors _derivs
-#else
-                 DataD _cxt _name tyvars constructors _derivs
-#endif
 #if MIN_VERSION_template_haskell(2,21,0)
                    -> makeAcidic' ss eventNames stateName (map void tyvars) constructors
 #else
                    -> makeAcidic' ss eventNames stateName tyvars constructors
 #endif
 
-#if MIN_VERSION_template_haskell(2,11,0)
                  NewtypeD _cxt _name tyvars _kind constructor _derivs
-#else
-                 NewtypeD _cxt _name tyvars constructor _derivs
-#endif
 #if MIN_VERSION_template_haskell(2,21,0)
                    -> makeAcidic' ss eventNames stateName (map void tyvars) [constructor]
 #else
@@ -153,11 +145,7 @@ getEventType :: Name -> Q Type
 getEventType eventName
     = do eventInfo <- reify eventName
          case eventInfo of
-#if MIN_VERSION_template_haskell(2,11,0)
            VarI _name eventType _decl
-#else
-           VarI _name eventType _decl _fixity
-#endif
              -> expandSyns eventType
            _ -> error $ "Data.Acid.TemplateHaskell: Events must be functions: " ++ show eventName
 
@@ -236,12 +224,7 @@ eventCxts targetStateType targetTyVars eventName eventType =
     where
       -- | rename the type variables in a Pred
       unify :: [(Name, Name)] -> Pred -> Pred
-#if MIN_VERSION_template_haskell(2,10,0)
       unify table p = rename p table p -- in 2.10.0: type Pred = Type
-#else
-      unify table p@(ClassP n tys) = ClassP n (map (rename p table) tys)
-      unify table p@(EqualP a b)   = EqualP (rename p table a) (rename p table b)
-#endif
 
       -- | rename the type variables in a Type
       rename :: Pred -> [(Name, Name)] -> Type -> Type
@@ -286,12 +269,7 @@ eventCxts targetStateType targetTyVars eventName eventType =
 renameState :: Type -> Type -> Cxt -> Cxt
 renameState tfrom tto cxt = map renamePred cxt
   where
-#if MIN_VERSION_template_haskell(2,10,0)
     renamePred p = renameType p -- in 2.10.0: type Pred = Type
-#else
-    renamePred (ClassP n tys) = ClassP n (map renameType tys)
-    renamePred (EqualP a b)   = EqualP (renameType a) (renameType b)
-#endif
     renameType n | n == tfrom = tto
     renameType (AppT a b)     = AppT (renameType a) (renameType b)
     renameType (SigT a k)     = SigT (renameType a) k
@@ -435,7 +413,6 @@ data TypeAnalysis = TypeAnalysis
 analyseType :: Name -> Type -> TypeAnalysis
 analyseType eventName t = go [] [] [] t
   where
-#if MIN_VERSION_template_haskell(2,10,0)
     getMonadReader :: Cxt -> Name -> [(Type, Type)]
     getMonadReader cxt m = do
        constraint@(AppT (AppT (ConT c) x) m') <- cxt
@@ -447,19 +424,6 @@ analyseType eventName t = go [] [] [] t
        constraint@(AppT (AppT (ConT c) x) m') <- cxt
        guard (c == ''MonadState && m' == VarT m)
        return (constraint, x)
-#else
-    getMonadReader :: Cxt -> Name -> [(Pred, Type)]
-    getMonadReader cxt m = do
-       constraint@(ClassP c [x, m']) <- cxt
-       guard (c == ''MonadReader && m' == VarT m)
-       return (constraint, x)
-
-    getMonadState :: Cxt -> Name -> [(Pred, Type)]
-    getMonadState cxt m = do
-       constraint@(ClassP c [x, m']) <- cxt
-       guard (c == ''MonadState && m' == VarT m)
-       return (constraint, x)
-#endif
 
     -- a -> b
     go tyvars cxt args (AppT (AppT ArrowT a) b)
