@@ -17,10 +17,6 @@ import Data.Acid.Core
 import Control.Monad
 import Control.Monad.State   (MonadState, get, State)
 import Control.Monad.Reader  (MonadReader, Reader, runReader)
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative
-#endif
-
 
 class IsAcidic st where
     acidEvents :: [Event st]

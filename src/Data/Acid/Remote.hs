@@ -96,9 +96,6 @@ module Data.Acid.Remote
     ) where
 
 import Prelude                                hiding ( catch )
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative
-#endif
 import Control.Concurrent.STM                        ( atomically )
 import Control.Concurrent.STM.TMVar                  ( newEmptyTMVar, readTMVar, takeTMVar, tryTakeTMVar, putTMVar )
 import Control.Concurrent.STM.TQueue
