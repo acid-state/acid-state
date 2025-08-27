@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, DeriveDataTypeable, RankNTypes, RecordWildCards, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, RankNTypes, RecordWildCards, ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 {- |
  Module      :  Data.Acid.Remote
@@ -122,7 +122,6 @@ import qualified Data.ByteString.Lazy                as Lazy
 import Data.IORef                                    ( newIORef, readIORef, writeIORef )
 import Data.Serialize
 import Data.Set                                      ( Set, member )
-import Data.Typeable                                 ( Typeable )
 import GHC.IO.Exception                              ( IOErrorType(..) )
 import Network.BSD                                   ( PortNumber, getProtocolNumber, getHostByName, hostAddress )
 import Network.Socket
@@ -150,7 +149,7 @@ data AcidRemoteException
     | AcidStateClosed
     | SerializeError String
     | AuthenticationError String
-      deriving (Eq, Show, Typeable)
+      deriving (Eq, Show)
 instance Exception AcidRemoteException
 
 -- | create a 'CommChannel' from a 'Handle'. The 'Handle' should be
@@ -380,7 +379,6 @@ process CommChannel{..} acidState
                                 writeChan chan (return Acknowledgement)
 
 data RemoteState st = RemoteState (Command -> IO (MVar Response)) (IO ())
-                    deriving (Typeable)
 
 {- | Connect to an acid-state server which is sharing an 'AcidState'. -}
 openRemoteState :: IsAcidic st =>

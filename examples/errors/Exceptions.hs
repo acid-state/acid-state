@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
@@ -17,8 +16,6 @@ import           Data.SafeCopy
 import           System.Directory
 import           System.Environment
 
-import           Data.Typeable
-
 import           Control.Exception
 import           Prelude             hiding (catch)
 
@@ -26,7 +23,7 @@ import           Prelude             hiding (catch)
 -- The Haskell structure that we want to encapsulate
 
 data MyState = MyState Integer
-    deriving (Show, Typeable)
+    deriving (Show)
 
 $(deriveSafeCopy 0 'base ''MyState)
 

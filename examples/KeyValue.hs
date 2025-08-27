@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
@@ -15,8 +14,6 @@ import           System.Environment
 import           System.Exit
 import           System.IO
 
-import           Data.Typeable
-
 import qualified Data.Map             as Map
 
 ------------------------------------------------------
@@ -26,7 +23,6 @@ type Key = String
 type Value = String
 
 data KeyValue = KeyValue !(Map.Map Key Value)
-    deriving (Typeable)
 
 $(deriveSafeCopy 0 'base ''KeyValue)
 

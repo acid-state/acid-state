@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeFamilies       #-}
@@ -9,14 +8,13 @@ import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Acid
 import           Data.SafeCopy
-import           Data.Typeable
 import           System.Environment
 
 ------------------------------------------------------
 -- The Haskell structure that we want to encapsulate
 
 data HelloWorldState = HelloWorldState String
-    deriving (Show, Typeable)
+    deriving (Show)
 
 $(deriveSafeCopy 0 'base ''HelloWorldState)
 

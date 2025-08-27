@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies       #-}
 
@@ -15,8 +14,6 @@ import           Data.SafeCopy
 import           System.Environment
 import           System.IO
 
-import           Data.Typeable
-
 import qualified Data.Map             as Map
 
 ------------------------------------------------------
@@ -26,7 +23,6 @@ type Key = String
 type Value = String
 
 data KeyValue = KeyValue !(Map.Map Key Value)
-    deriving (Typeable)
 
 instance SafeCopy KeyValue where
     putCopy (KeyValue state) = contain $ safePut state
@@ -74,8 +70,6 @@ main = do acid <- openLocalState (KeyValue Map.empty)
 data InsertKey = InsertKey Key Value
 data LookupKey = LookupKey Key
 
-
-deriving instance Typeable InsertKey
 instance SafeCopy InsertKey where
     putCopy (InsertKey key value) = contain $ safePut key >> safePut value
     getCopy = contain $ InsertKey <$> safeGet <*> safeGet
@@ -84,7 +78,6 @@ instance Method InsertKey where
     type MethodState InsertKey = KeyValue
 instance UpdateEvent InsertKey
 
-deriving instance Typeable LookupKey
 instance SafeCopy LookupKey where
     putCopy (LookupKey key) = contain $ safePut key
     getCopy = contain $ LookupKey <$> safeGet

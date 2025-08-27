@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, BangPatterns, CPP #-}
+{-# LANGUAGE BangPatterns, CPP #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Data.Acid.Local
@@ -76,9 +76,9 @@ data LocalState st
                  , localEvents      :: FileLog (Tagged ByteString)
                  , localCheckpoints :: FileLog (Checkpoint st)
                  , localLock        :: FileLock
-                 } deriving (Typeable)
+                 }
 
-newtype StateIsLocked = StateIsLocked FilePath deriving (Show, Typeable)
+newtype StateIsLocked = StateIsLocked FilePath deriving (Show)
 
 instance Exception StateIsLocked
 

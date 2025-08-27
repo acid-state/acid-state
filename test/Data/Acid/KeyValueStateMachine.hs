@@ -17,7 +17,6 @@ import           Data.Acid
 import           Data.Acid.StateMachineTest
 import           Data.SafeCopy
 import qualified Data.Map as Map
-import           Data.Typeable
 import           GHC.Generics
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
@@ -28,7 +27,7 @@ type Key = Int
 type Value = String
 
 data KeyValue = KeyValue !(Map.Map Key Value)
-    deriving (Eq, Show, Typeable)
+    deriving (Eq, Show)
 
 $(deriveSafeCopy 0 'base ''KeyValue)
 

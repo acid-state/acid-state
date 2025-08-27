@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies       #-}
 
@@ -14,13 +13,10 @@ import           Data.SafeCopy
 import           System.Environment
 import           System.IO
 
-import           Data.Typeable
-
 ------------------------------------------------------
 -- The Haskell structure that we want to encapsulate
 
 data StressState = StressState !Int
-    deriving (Typeable)
 
 instance SafeCopy StressState where
     putCopy (StressState state) = contain $ safePut state
@@ -66,7 +62,6 @@ main = do args <- getArgs
 data PokeState = PokeState
 data QueryState = QueryState
 
-deriving instance Typeable PokeState
 instance SafeCopy PokeState where
     putCopy PokeState = contain $ return ()
     getCopy = contain $ return PokeState
@@ -75,7 +70,6 @@ instance Method PokeState where
     type MethodState PokeState = StressState
 instance UpdateEvent PokeState
 
-deriving instance Typeable QueryState
 instance SafeCopy QueryState where
     putCopy QueryState = contain $ return ()
     getCopy = contain $ return QueryState

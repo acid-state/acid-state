@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
@@ -8,12 +7,11 @@ import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Acid
 import           Data.SafeCopy
-import           Data.Typeable
 
 ------------------------------------------------------
 -- The Haskell structure that we want to encapsulate
 
-data StressState = StressState !Int deriving (Typeable)
+data StressState = StressState !Int
 
 $(deriveSafeCopy 0 'base ''StressState)
 

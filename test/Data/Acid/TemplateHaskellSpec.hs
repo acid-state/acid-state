@@ -11,7 +11,6 @@ module Data.Acid.TemplateHaskellSpec where
 import Test.Hspec hiding (context)
 
 import Data.SafeCopy (SafeCopy)
-import Data.Typeable (Typeable)
 import Control.DeepSeq (force)
 import Control.Exception (evaluate)
 import Language.Haskell.TH

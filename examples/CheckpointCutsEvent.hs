@@ -14,7 +14,6 @@ If you comment out the 'createArchive' line below, then the checkpoint
 files should contain 10 checkpoints each.
 
 -}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeFamilies       #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -27,7 +26,6 @@ import           Control.Monad.State  ( get, put )
 import           Data.Acid
 import           Data.List            ( sort )
 import           Data.SafeCopy
-import           Data.Typeable
 import           System.Directory
 import           System.Environment
 
@@ -35,7 +33,7 @@ import           System.Environment
 -- The Haskell structure that we want to encapsulate
 
 newtype Counter = Counter { unCounter :: Integer }
-    deriving (Show, Typeable)
+    deriving (Show)
 
 $(deriveSafeCopy 0 'base ''Counter)
 

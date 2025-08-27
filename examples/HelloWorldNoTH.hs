@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies       #-}
 
@@ -13,13 +12,11 @@ import           Control.Monad.State  (put)
 import           Data.SafeCopy
 import           System.Environment
 
-import           Data.Typeable
-
 ------------------------------------------------------
 -- The Haskell structure that we want to encapsulate
 
 data HelloWorldState = HelloWorldState String
-    deriving (Show, Typeable)
+    deriving (Show)
 
 instance SafeCopy HelloWorldState where
     putCopy (HelloWorldState state) = contain $ safePut state
@@ -57,8 +54,6 @@ main = do acid <- openLocalState (HelloWorldState "Hello world")
 data WriteState = WriteState String
 data QueryState = QueryState
 
-
-deriving instance Typeable WriteState
 instance SafeCopy WriteState where
     putCopy (WriteState st) = contain $ safePut st
     getCopy = contain $ liftM WriteState safeGet
@@ -67,7 +62,6 @@ instance Method WriteState where
     type MethodState WriteState = HelloWorldState
 instance UpdateEvent WriteState
 
-deriving instance Typeable QueryState
 instance SafeCopy QueryState where
     putCopy QueryState = contain $ return ()
     getCopy = contain $ return QueryState

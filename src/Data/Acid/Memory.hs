@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, BangPatterns #-}
+{-# LANGUAGE BangPatterns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Data.Acid.Memory
@@ -22,7 +22,6 @@ import Data.Acid.Abstract
 import Control.Concurrent             ( newEmptyMVar, putMVar, MVar )
 import Control.Monad.State            ( runState )
 import Data.ByteString.Lazy           ( ByteString )
-import Data.Typeable                  ( Typeable )
 import Data.IORef                     ( IORef, newIORef, readIORef, writeIORef )
 
 
@@ -42,7 +41,7 @@ import Data.IORef                     ( IORef, newIORef, readIORef, writeIORef )
 data MemoryState st
     = MemoryState { localCore    :: Core st
                   , localCopy    :: IORef st
-                  } deriving (Typeable)
+                  }
 
 -- | Create an 'AcidState' given an initial value.  The state is kept only in
 -- memory, so it is not durable.

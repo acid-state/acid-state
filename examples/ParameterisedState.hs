@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -28,10 +27,6 @@ $(deriveSafeCopy 0 'base ''Entry)
 
 newtype Store k = Store { store :: Map.Map k (Entry k) }
     deriving (Eq, Generic)
-
-#if __GLASGOW_HASKELL__ <= 708
-deriving instance Typeable1 Store
-#endif
 
 instance (Ord k, Serialize k, SafeCopy k, Typeable k) => SafeCopy (Store k)
 instance (Ord k, Serialize k) => Serialize (Store k)

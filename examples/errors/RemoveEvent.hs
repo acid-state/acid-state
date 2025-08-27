@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TemplateHaskell    #-}
 {-# LANGUAGE TypeFamilies       #-}
 
@@ -11,8 +10,6 @@ import           Data.SafeCopy
 import           System.Directory
 import           System.Environment
 import           Data.List (isSuffixOf)
-
-import           Data.Typeable
 
 import           Control.Exception
 import           Prelude             hiding (catch)
