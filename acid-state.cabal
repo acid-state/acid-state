@@ -13,10 +13,11 @@ Build-type:          Simple
 Cabal-version:       >=1.10
 
 tested-with:
-  GHC == 9.12.1
-  GHC == 9.10.1
+  GHC == 9.14.1
+  GHC == 9.12.2
+  GHC == 9.10.2
   GHC == 9.8.4
-  GHC == 9.6.6
+  GHC == 9.6.7
   GHC == 9.4.8
   GHC == 9.2.8
   GHC == 9.0.2
@@ -75,7 +76,7 @@ Library
                        mtl,
                        network < 3.3,
                        network-bsd,
-                       template-haskell < 2.24,
+                       template-haskell < 2.25,
                        th-expand-syns
 
   if os(windows)
@@ -117,7 +118,6 @@ test-suite specs
                      , acid-state
                      , deepseq
                      , hspec
-                     , hspec-discover
                      , mtl
                      , safecopy
                      , template-haskell
