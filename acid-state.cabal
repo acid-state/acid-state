@@ -1,6 +1,6 @@
+Cabal-version:       1.18
 Name:                acid-state
-Version:             0.16.1.3
-x-revision:          2
+Version:             0.16.1.4
 Synopsis:            Add ACID guarantees to any serializable Haskell data structure.
 Description:         Use regular Haskell data structures as your database and get stronger ACID guarantees than most RDBMS offer.
 Homepage:            https://github.com/acid-state/acid-state
@@ -10,7 +10,6 @@ Maintainer:          Lemmih <lemmih@gmail.com>
 -- Copyright:
 Category:            Database
 Build-type:          Simple
-Cabal-version:       >=1.10
 
 tested-with:
   GHC == 9.14.1
@@ -30,8 +29,9 @@ tested-with:
   -- https://github.com/haskell/cabal/issues/10379
   -- GHC == 8.0.2
 
-Extra-source-files:
+Extra-doc-files:
         CHANGELOG.md
+Extra-source-files:
         test-state/OldStateTest1/*.log
         test-state/OldStateTest1/*.version
         test-state/OldStateTest2/*.log
@@ -49,40 +49,41 @@ flag skip-state-machine-test
   manual: False
 
 Library
-  Exposed-Modules:     Data.Acid,
-                       Data.Acid.Archive,
-                       Data.Acid.Common,
-                       Data.Acid.Local, Data.Acid.Memory,
-                       Data.Acid.Memory.Pure, Data.Acid.Remote,
-                       Data.Acid.Advanced,
-                       Data.Acid.Log, Data.Acid.CRC,
-                       Data.Acid.Abstract, Data.Acid.Core,
+  Exposed-Modules:     Data.Acid
+                       Data.Acid.Archive
+                       Data.Acid.Common
+                       Data.Acid.Local Data.Acid.Memory
+                       Data.Acid.Memory.Pure Data.Acid.Remote
+                       Data.Acid.Advanced
+                       Data.Acid.Log Data.Acid.CRC
+                       Data.Acid.Abstract Data.Acid.Core
                        Data.Acid.TemplateHaskell
                        Data.Acid.Repair
 
-  Other-modules:       Paths_acid_state,
+  Other-modules:       Paths_acid_state
                        FileIO
 
-  Build-depends:       array,
-                       base >= 4.9 && < 5,
-                       bytestring >= 0.10.2,
-                       cereal >= 0.4.1.0,
-                       containers,
-                       safecopy >= 0.6 && < 0.11,
-                       stm >= 2.4,
-                       directory,
-                       filelock,
-                       filepath,
-                       mtl,
-                       network < 3.3,
-                       network-bsd,
-                       template-haskell < 2.25,
-                       th-expand-syns
+  -- Lower bounds taken from GHC 8.0 / LTS 7.0
+  Build-depends:       array             >= 0.5.1.1
+                     , base              >= 4.9        && < 5
+                     , bytestring        >= 0.10.8.0
+                     , cereal            >= 0.5.3.0
+                     , containers        >= 0.5.7.1
+                     , safecopy          >= 0.6        && < 0.11
+                     , stm               >= 2.4
+                     , directory         >= 1.2.6.2
+                     , filelock          >= 0.1.0.1
+                     , filepath          >= 1.4.1.0
+                     , mtl               >= 2.2.1
+                     , network           >= 2.6.3.1    && < 3.3
+                     , network-bsd
+                     , template-haskell  >= 2.11.0.0   && < 2.25
+                     , th-expand-syns    >= 0.4.0.0
 
   if os(windows)
-     Build-depends:       Win32
+     Build-depends:       Win32          >= 2.3.1.1
   else
-     Build-depends:       unix
+     Build-depends:       unix           >= 2.7.2.0
 
   Hs-Source-Dirs:      src/
 
@@ -93,13 +94,12 @@ Library
 
   default-language:    Haskell2010
   GHC-Options:         -Wall
-                       -fno-warn-dodgy-imports
-                       -fno-warn-missing-signatures
-                       -fno-warn-name-shadowing
-                       -fno-warn-unused-do-bind
-                       -fno-warn-unused-matches
-  if impl(ghc >= 8.0)
-    ghc-options:       -Wcompat
+                       -Wcompat
+                       -Wno-dodgy-imports
+                       -Wno-missing-signatures
+                       -Wno-name-shadowing
+                       -Wno-unused-do-bind
+                       -Wno-unused-matches
 
 executable acid-state-repair
   hs-source-dirs: repair
