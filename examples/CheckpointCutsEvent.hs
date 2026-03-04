@@ -24,6 +24,7 @@ import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.State  ( get, put )
 import           Data.Acid
+import           Data.Acid.Local
 import           Data.List            ( sort )
 import           Data.SafeCopy
 import           System.Directory
@@ -53,10 +54,13 @@ main = do
      exists <- doesDirectoryExist fp
      when exists $ removeDirectoryRecursive fp
      acid <- openLocalStateFrom fp (Counter 0)
-     replicateM_ 10 $ do is <- replicateM 10 (update acid IncCounter)
+     replicateM_ 5  $ do is <- replicateM 10 (update acid IncCounter)
                          print is
                          createCheckpoint acid
                          createArchive acid
+     replicateM_ 5  $ do is <- replicateM 10 (update acid IncCounter)
+                         print is
+                         createCheckpointAndArchive acid
      closeAcidState acid
      checkDirectoryContents fp expected_state
      checkDirectoryContents (fp ++ "/Archive") expected_archive
