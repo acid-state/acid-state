@@ -23,6 +23,7 @@ module Data.Acid.Local
     , scheduleLocalUpdate'
     , scheduleLocalColdUpdate'
     , createCheckpointAndClose
+    , createCheckpointAndArchive
     , LocalState(..)
     , Checkpoint(..)
     , SerialisationLayer(..)
@@ -40,7 +41,7 @@ import Data.Acid.Abstract
 import Control.Concurrent             ( newEmptyMVar, putMVar, takeMVar, MVar )
 import Control.Exception              ( onException, evaluate, Exception, throwIO )
 import Control.Monad.State            ( runState )
-import Control.Monad                  ( join )
+import Control.Monad                  ( join, void )
 import Data.ByteString.Lazy           ( ByteString )
 import qualified Data.ByteString.Lazy as Lazy ( length )
 
@@ -186,14 +187,16 @@ localQueryCold acidState event
 --   with this call.
 --
 --   This call will not return until the operation has succeeded.
-createLocalCheckpoint :: IsAcidic st => LocalState st -> IO ()
+--
+--   Returns the lowest event ID that didn't contribute to the checkpoint.
+createLocalCheckpoint :: LocalState st -> IO EntryId
 createLocalCheckpoint acidState
-    = do cutFileLog (localEvents acidState)
+    = do _ <- cutFileLog (localEvents acidState)
          mvar <- newEmptyMVar
          withCoreState (localCore acidState) $ \st ->
            do eventId <- askCurrentEntryId (localEvents acidState)
               pushAction (localEvents acidState) $
-                pushEntry (localCheckpoints acidState) (Checkpoint eventId st) (putMVar mvar ())
+                pushEntry (localCheckpoints acidState) (Checkpoint eventId st) (putMVar mvar eventId)
          takeMVar mvar
 
 -- | Save a snapshot to disk and close the AcidState as a single atomic
@@ -210,6 +213,30 @@ createCheckpointAndClose abstract_state
          closeFileLog (localEvents acidState)
          closeFileLog (localCheckpoints acidState)
          unlockFile (localLock acidState)
+  where acidState = downcast abstract_state
+
+-- | Take a snapshot of the state and save it to disk, then archive data that is
+--   not needed to restore the checkpoint. Transactions and checkpoints can run
+--   concurrently with this call.
+--
+--   This is similar to calling `createCheckpoint` followed by `createArchive`,
+--   but it avoids the need to re-read the checkpoints file.
+createCheckpointAndArchive :: Typeable st => AcidState st -> IO ()
+createCheckpointAndArchive abstract_state
+    = do entryId <- createLocalCheckpoint acidState
+         -- We need to look at the last checkpoint saved to disk. Since
+         -- checkpoints can be written in parallel with this call, we can't
+         -- guarantee that the checkpoint we get really is the last one but
+         -- that's alright.
+         currentCheckpointId <- cutFileLog (localCheckpoints acidState)
+         -- 'currentCheckpointId' is the ID of the next checkpoint that will be written to disk.
+         -- 'currentCheckpointId-1' must then be the ID of a checkpoint on disk.
+         let durableCheckpointId = currentCheckpointId-1
+         -- 'entryId' is the lowest event ID that didn't contribute to the checkpoint we created.
+         -- 'archiveBefore' moves all events that are lower than this entryId to the archive.
+         -- Since 'createLocalCheckpoint' does not return until the checkpoint is durable, the
+         -- 'durableCheckpointId' cannot have a lower entryId than our recent checkpoint.
+         archiveBefore durableCheckpointId entryId acidState
   where acidState = downcast abstract_state
 
 
@@ -445,14 +472,22 @@ createLocalArchive state
        let durableCheckpointId = currentCheckpointId-1
        checkpoints <- readEntriesFrom (localCheckpoints state) durableCheckpointId
        case checkpoints of
-         []      -> return ()
-         (Checkpoint entryId _content : _)
-           -> do -- 'entryId' is the lowest entryId that didn't contribute to the checkpoint.
-                 -- 'archiveFileLog' moves all files that are lower than this entryId to the archive.
-                 archiveFileLog (localEvents state) entryId
-                 -- In the same style as above, we archive all log files that came before the log file
-                 -- which contains our checkpoint.
-                 archiveFileLog (localCheckpoints state) durableCheckpointId
+         []                                -> return ()
+         (Checkpoint entryId _content : _) -> archiveBefore durableCheckpointId entryId state
+         -- 'entryId' is the lowest entryId that didn't contribute to the
+         -- checkpoint. 'archiveBefore' moves to the archive all log files of
+         -- events that are lower than this entryId, and all log files of
+         -- checkpoints that came before the log file which contains our
+         -- checkpoint.
+
+-- | Given the ID of a checkpoint on disk, and the ID of an event such that all
+-- lower event IDs definitely contributed to the checkpoint, archive any
+-- checkpoints/events with lower IDs.
+archiveBefore :: EntryId -> EntryId -> LocalState st -> IO ()
+archiveBefore durableCheckpointId entryId state
+ = do archiveFileLog (localEvents state) entryId
+      archiveFileLog (localCheckpoints state) durableCheckpointId
+
 
 toAcidState :: IsAcidic st => LocalState st -> AcidState st
 toAcidState local
@@ -460,7 +495,7 @@ toAcidState local
               , scheduleColdUpdate = scheduleLocalColdUpdate local
               , _query = localQuery local
               , queryCold = localQueryCold local
-              , createCheckpoint = createLocalCheckpoint local
+              , createCheckpoint = void (createLocalCheckpoint local)
               , createArchive = createLocalArchive local
               , closeAcidState = closeLocalState local
               , acidSubState = mkAnyState local

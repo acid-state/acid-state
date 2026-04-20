@@ -55,7 +55,8 @@ data AcidState st
 --   Reverting to a state before the last checkpoint will not be possible if the 'Archive' folder
 --   has been thrown out.
 --
---   This method is idempotent and does not block the normal operation of the AcidState.
+--   This method is idempotent and does not block the normal operation of the AcidState. However,
+--   calling 'createArchive' more than once concurrently may result in errors.
               , createArchive :: IO ()
               ,
 -- | Close an AcidState and associated resources.

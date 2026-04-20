@@ -268,6 +268,11 @@ filterLogFiles minEntryIdMb maxEntryIdMb logFiles = worker logFiles
 
 -- | Move all log files that do not contain entries equal or higher than the
 -- given entryId into an @Archive/@ directory.
+--
+-- This does not account for the possibility that log files may be removed
+-- between the calls to 'findLogFiles' and 'renameFile'.  Thus calling
+-- 'archiveFileLog' concurrently on the same log may result in 'renameFile'
+-- yielding a "does not exist" error.
 archiveFileLog :: FileLog object -> EntryId -> IO ()
 archiveFileLog fLog entryId = do
   logFiles <- findLogFiles (logIdentifier fLog)
@@ -339,8 +344,7 @@ pushEntry fLog object finally = atomically $ do
   (entries, actions) <- readTVar (logQueue fLog)
   writeTVar (logQueue fLog) ( encoded : entries, finally : actions )
  where
-  encoded = Lazy.fromChunks [ Strict.copy $ Lazy.toStrict $
-              serialiserEncode (logSerialiser (logIdentifier fLog)) object ]
+  encoded = serialiserEncode (logSerialiser (logIdentifier fLog)) object
 
 -- | The given IO action is executed once all previous entries are durable.
 pushAction :: FileLog object -> IO () -> IO ()

@@ -40,19 +40,22 @@ module Data.Acid.StateMachineTest
   ) where
 
 import           Control.DeepSeq
-import           Control.Exception (Exception, IOException, throw, catch, try, evaluate)
+import           Control.Exception (Exception, IOException, throw, throwIO, catch, try, evaluate)
 import           Control.Monad.IO.Class ( MonadIO(..) )
+import           Control.Monad ( unless )
 import           Control.Monad.State    ( State, evalState, execState )
 import qualified Data.Acid as Acid
 import qualified Data.Acid.Common as Common
 import qualified Data.Acid.Core as Core
 import qualified Data.Acid.Local as Local
+import           Data.List (isPrefixOf)
 import           Data.Maybe
 import qualified Data.SafeCopy as SafeCopy
 import           Data.Typeable
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import           System.Directory (removeDirectoryRecursive, removeFile)
+import           System.IO.Error (isDoesNotExistError)
 import           System.IO.Unsafe (unsafePerformIO)
 
 -- | Exception to be thrown when a query or update fails.
@@ -153,6 +156,8 @@ data AcidStateInterface s =
         , closeState           :: Acid.AcidState s -> IO ()
         , checkpointState      :: Acid.AcidState s -> IO ()
         , checkpointCloseState :: Acid.AcidState s -> IO ()
+        , checkpointArchiveState::Acid.AcidState s -> IO ()
+        , archiveState         :: Acid.AcidState s -> IO ()
         , resetState           :: IO ()
         , statePath            :: FilePath
         }
@@ -169,6 +174,8 @@ acidStateInterface fp =
                        , closeState           = Acid.closeAcidState
                        , checkpointState      = Acid.createCheckpoint
                        , checkpointCloseState = Local.createCheckpointAndClose
+                       , checkpointArchiveState = Local.createCheckpointAndArchive
+                       , archiveState           = Acid.createArchive
                        , resetState           = removeDirectoryRecursive fp
                                                   `catch` (\ (_ :: IOException) -> return ())
                        , statePath            = fp
@@ -251,6 +258,47 @@ checkpointClose AcidStateInterface{..} =
     execute (WithState _ (Var (Concrete (Opaque st)))) = liftIO (checkpointCloseState st)
     update (StateOpen s _) _ _ = StateClosed s
     update _               _ _ = error "checkpointClose: not open"
+
+-- | Command to take a checkpoint of the state and archive previous checkpoints.
+checkpointArchive :: MonadIO m => AcidStateInterface s -> Command Gen m (Model s)
+checkpointArchive AcidStateInterface{..} =
+    Command (genWithState "checkpointArchive") execute [ Require require ]
+  where
+    require model _ = isOpen model
+    execute (WithState _ (Var (Concrete (Opaque st)))) = liftIO (checkpointArchiveState st)
+
+-- | Command to take a checkpoint of the state and archive previous checkpoints.
+-- Ignores any file renaming errors that arise due to parallel archive
+-- operations.
+checkpointArchiveIgnoringDoesNotExistErrors :: MonadIO m => AcidStateInterface s -> Command Gen m (Model s)
+checkpointArchiveIgnoringDoesNotExistErrors AcidStateInterface{..} =
+    Command (genWithState "checkpointArchiveIgnoringDoesNotExistErrors") execute [ Require require ]
+  where
+    require model _ = isOpen model
+    execute (WithState _ (Var (Concrete (Opaque st)))) = liftIO (ignoreDoesNotExistErrors (checkpointArchiveState st))
+
+-- | Command to archive previous checkpoints.
+archive :: MonadIO m => AcidStateInterface s -> Command Gen m (Model s)
+archive AcidStateInterface{..} =
+    Command (genWithState "archive") execute [ Require require ]
+  where
+    require model _ = isOpen model
+    execute (WithState _ (Var (Concrete (Opaque st)))) = liftIO (archiveState st)
+
+-- | Command to archive previous checkpoints. Ignores any file renaming errors
+-- that arise due to parallel archive operations.
+archiveIgnoringDoesNotExistErrors :: MonadIO m => AcidStateInterface s -> Command Gen m (Model s)
+archiveIgnoringDoesNotExistErrors AcidStateInterface{..} =
+    Command (genWithState "archiveIgnoringDoesNotExistErrors") execute [ Require require ]
+  where
+    require model _ = isOpen model
+    execute (WithState _ (Var (Concrete (Opaque st)))) = liftIO (ignoreDoesNotExistErrors (archiveState st))
+
+-- | Execute the IO action, silently ignoring any file-does-not-exist errors.
+-- These can occur when two 'createArchive' operations happen in parallel (e.g.
+-- from calls to 'renameFile').
+ignoreDoesNotExistErrors :: IO () -> IO ()
+ignoreDoesNotExistErrors m = m `catch` \e -> unless (isDoesNotExistError e) $ throwIO e
 
 -- | Command to simulate killing the process without closing the
 -- state.  This does not actually stop the old thread, though.
@@ -488,6 +536,8 @@ acidStateSequentialProperty i gen_initial_state range commands = property $ do
                  , close i
                  , checkpoint i
                  , checkpointClose i
+                 , checkpointArchive i
+                 , archive i
                  , kill i
                  ] ++ commands ++ commands
     test $ do liftIO $ resetState i
@@ -502,14 +552,30 @@ acidStateSequentialProperty i gen_initial_state range commands = property $ do
 -- Note that if the generator for initial values can return more than
 -- one result, this will fail due to #20.
 --
--- The state cannot be opened twice in parallel, so the length of the
--- sequential prefix must be at least 1, so that the open command
--- happens exactly once.
+-- The state cannot be opened twice in parallel, so the open command
+-- must happen exactly once.  To ensure this:
+--
+--  * The length of the sequential prefix must be at least 1.
+--
+--  * Shrinking is disabled in this test, because shrinking may move the 'open'
+--    commands out of the sequential prefix into the parallel section.
+--
+-- Moreover we do not test close operations happening in parallel with writes.
+--
+-- TODO: all this, and in addition #133, suggests that having 'open' be a
+-- command is the wrong strategy. Instead, we should refactor
+-- 'AcidStateInterface' to capture an open 'AcidState' in the closure, use the
+-- state type as the model type, and test only commands that do not open or
+-- close the state.
+--
 acidStateParallelProperty :: AcidStateInterface s -> Gen s -> Range Int -> Range Int -> [Command Gen (TestT IO) (Model s)] -> Property
-acidStateParallelProperty i gen_initial_state prefix_range parallel_range commands = property $ do
+acidStateParallelProperty i gen_initial_state prefix_range parallel_range commands =
+  withShrinks 0 $ property $ do
     actions <- forAll $ Gen.parallel prefix_range parallel_range StateAbsent $
                  [ open i gen_initial_state
                  , checkpoint i
+                 , checkpointArchiveIgnoringDoesNotExistErrors i
+                 , archiveIgnoringDoesNotExistErrors i
                  ] ++ commands ++ commands
     test $ do liftIO $ resetState i
               executeParallel StateAbsent actions
