@@ -339,8 +339,7 @@ pushEntry fLog object finally = atomically $ do
   (entries, actions) <- readTVar (logQueue fLog)
   writeTVar (logQueue fLog) ( encoded : entries, finally : actions )
  where
-  encoded = Lazy.fromChunks [ Strict.copy $ Lazy.toStrict $
-              serialiserEncode (logSerialiser (logIdentifier fLog)) object ]
+  encoded = serialiserEncode (logSerialiser (logIdentifier fLog)) object
 
 -- | The given IO action is executed once all previous entries are durable.
 pushAction :: FileLog object -> IO () -> IO ()
