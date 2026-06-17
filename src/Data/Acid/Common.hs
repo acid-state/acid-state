@@ -25,21 +25,11 @@ class IsAcidic st where
 
 -- | Context monad for Update events.
 newtype Update st a = Update { unUpdate :: State st a }
-    deriving (Monad, Functor, MonadState st)
-
--- mtl pre-2.0 doesn't have these instances to newtype-derive, but they're
--- simple enough.
-instance Applicative (Update st) where
-    pure = return
-    (<*>) = ap
+    deriving (Monad, Applicative, Functor, MonadState st)
 
 -- | Context monad for Query events.
 newtype Query st a  = Query { unQuery :: Reader st a }
-    deriving (Monad, Functor, MonadReader st)
-
-instance Applicative (Query st) where
-    pure = return
-    (<*>) = ap
+    deriving (Monad, Applicative, Functor, MonadReader st)
 
 -- | Run a query in the Update Monad.
 liftQuery :: Query st a -> Update st a
