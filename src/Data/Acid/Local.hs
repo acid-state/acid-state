@@ -73,6 +73,11 @@ data LocalState st
                  , localEvents      :: FileLog (Tagged ByteString)
                  , localCheckpoints :: FileLog (Checkpoint st)
                  , localLock        :: FileLock
+                 , localLastCheckpoint :: IORef (Maybe EntryId)
+                   -- ^ Event cutoff of the most recent checkpoint made durable
+                   --   by this process, if any.  Used by
+                   --   'createCheckpointAndClose' to avoid writing a checkpoint
+                   --   identical to one already on disk.
                  }
 
 newtype StateIsLocked = StateIsLocked FilePath deriving (Show)
@@ -193,19 +198,35 @@ createLocalCheckpoint acidState
          withCoreState (localCore acidState) $ \st ->
            do eventId <- askCurrentEntryId (localEvents acidState)
               pushAction (localEvents acidState) $
-                pushEntry (localCheckpoints acidState) (Checkpoint eventId st) (putMVar mvar ())
+                pushEntry (localCheckpoints acidState) (Checkpoint eventId st) $
+                  do recordCheckpoint acidState eventId
+                     putMVar mvar ()
          takeMVar mvar
+
+-- | Note that a checkpoint with the given event cutoff is durable.
+--   Checkpoints may complete out of order, so keep the largest cutoff.
+recordCheckpoint :: LocalState st -> EntryId -> IO ()
+recordCheckpoint acidState eventId
+    = atomicModifyIORef' (localLastCheckpoint acidState) $ \old ->
+        (Just (maybe eventId (max eventId) old), ())
 
 -- | Save a snapshot to disk and close the AcidState as a single atomic
 --   action. This is useful when you want to make sure that no events
 --   are saved to disk after a checkpoint.
+--
+--   If this process has already made a checkpoint durable and no events
+--   have been logged since, that checkpoint already reflects the current
+--   state, so no new checkpoint is written.
 createCheckpointAndClose :: (IsAcidic st, Typeable st) => AcidState st -> IO ()
 createCheckpointAndClose abstract_state
     = do mvar <- newEmptyMVar
          closeCore' (localCore acidState) $ \st ->
            do eventId <- askCurrentEntryId (localEvents acidState)
+              lastCheckpoint <- readIORef (localLastCheckpoint acidState)
               pushAction (localEvents acidState) $
-                pushEntry (localCheckpoints acidState) (Checkpoint eventId st) (putMVar mvar ())
+                if lastCheckpoint == Just eventId
+                  then putMVar mvar ()
+                  else pushEntry (localCheckpoints acidState) (Checkpoint eventId st) (putMVar mvar ())
          takeMVar mvar
          closeFileLog (localEvents acidState)
          closeFileLog (localCheckpoints acidState)
@@ -408,12 +429,17 @@ resumeLocalStateFrom directory initialState delayLocking serialisationLayer =
       checkpointsLog <- openFileLog checkpointsLogKey
       stateCopy <- newIORef undefined
       withCoreState core (writeIORef stateCopy)
+      -- The checkpoint loaded above is deliberately not recorded here: it
+      -- may have been written with an older SafeCopy version, and closing
+      -- with createCheckpointAndClose is how such data gets migrated.
+      lastCheckpoint <- newIORef Nothing
 
       return $ toAcidState LocalState { localCore = core
                                       , localCopy = stateCopy
                                       , localEvents = eventsLog
                                       , localCheckpoints = checkpointsLog
                                       , localLock = lock
+                                      , localLastCheckpoint = lastCheckpoint
                                       }
     maybeLockFile path = do
       createDirectoryIfMissing True (takeDirectory path)
