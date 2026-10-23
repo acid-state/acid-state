@@ -117,13 +117,16 @@ test-suite specs
   build-depends:       base
                      , acid-state
                      , deepseq
+                     , directory
+                     , filepath
                      , hspec
                      , mtl
                      , safecopy
                      , template-haskell
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  other-modules:       Data.Acid.TemplateHaskellSpec
+  other-modules:       Data.Acid.CheckpointSpec
+                       Data.Acid.TemplateHaskellSpec
   default-language:    Haskell2010
 
 test-suite state-machine
