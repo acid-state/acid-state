@@ -1,3 +1,36 @@
+0.17.0
+======
+
+_Jeremy Shaw, 2026-10-29_
+
+- `createCheckpointAndClose` no longer writes a checkpoint when this
+  process has already made one durable and no events have been logged
+  since, making shutdown fast right after `createCheckpoint` (e.g. via the
+  remote `CreateCheckpoint` command)
+  ([#181](https://github.com/acid-state/acid-state/pull/181)).
+  A checkpoint is still written when the state is freshly created, when
+  events follow the last checkpoint, and when closing a state whose only
+  checkpoint is the one loaded at open (so SafeCopy migrations are still
+  saved).
+
+**Breaking changes and changed behaviour**
+
+- `LocalState` has a new field, `localLastCheckpoint`. Code that builds a
+  `LocalState` with positional arguments will no longer compile. Code that
+  builds one with record syntax will still compile (with only a
+  `-Wmissing-fields` warning), but leaves the field undefined: the next
+  `createCheckpoint` will then kill the log writer thread, and later
+  updates, checkpoints and closes will hang. Initialise the field with
+  `newIORef Nothing`.
+- `createCheckpointAndClose` no longer always appends a checkpoint. After
+  `createCheckpoint` followed by `createArchive`, the newest
+  `checkpoints-*.log` file is left empty and the latest checkpoint is in
+  the file before it. acid-state itself restores correctly, but backup,
+  replication or monitoring scripts that copy or check only the newest
+  checkpoint file must be updated to look at earlier files too.
+- Tools that use the checkpoint log's size, modification time or entry
+  count to confirm a clean shutdown may no longer see a change at close.
+
 0.16.1.4
 =========
 

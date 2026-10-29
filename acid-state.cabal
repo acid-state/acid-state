@@ -1,6 +1,6 @@
 Cabal-version:       1.18
 Name:                acid-state
-Version:             0.16.1.4
+Version:             0.17.0
 Synopsis:            Add ACID guarantees to any serializable Haskell data structure.
 Description:         Use regular Haskell data structures as your database and get stronger ACID guarantees than most RDBMS offer.
 Homepage:            https://github.com/acid-state/acid-state
